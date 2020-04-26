@@ -1,0 +1,12 @@
+def surprise():
+    print("     ____")
+    print("    /    \\")
+    print("   |______|")
+    print("    |    |")
+    print("    |    |")
+    print("    |    |")
+    print("    |    |")
+    print(" ___|    |___")
+    print("/   |    |   \\")
+    print("|     __     |")
+    print("\\____/  \\____/")
