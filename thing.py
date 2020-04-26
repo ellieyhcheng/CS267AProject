@@ -12,6 +12,10 @@ from sklearn.cluster import KMeans
 # https://www.youtube.com/watch?v=rftT_TRtGi4
 # https://dritchie.github.io/pdf/patterncolor.pdf
 
+# http://graphics.stanford.edu/projects/patternColoring/
+
+def segment(image):
+    return None
 
 def lightness(color):
     L,a,b = color
@@ -36,13 +40,17 @@ def spatial_features():
 
 # Properties of color relationship between two adjacent regions
 def perceptual_diff(c1, c2):
-    pass
+    l1, a1, b1 = c1
+    l2, a2, b2 = c2
+    return np.sqrt(l1**2+a1**2+b1**2) - np.sqrt(l2**2+a2**2+b2**2)
 
 def relative_lightness(c1, c2):
-    pass
+    l1, _, _ = c1
+    l2, _, _ = c2
+    return l1 - l2
 
 def relative_saturation(c1, c2):
-    pass
+    return saturation(c1) - saturation(c2)
 
 def chromatic_difference(c1, c2):
     pass
