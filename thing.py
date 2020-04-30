@@ -74,6 +74,10 @@ class histogram_thingy():
     def get_histogram(self, x):
         return self.clf.decision_function(x)
 
+class ColorGroup:
+    def __init__(self):
+        pass
+
 # Individual segments within a color group
 class ColorGroupSegment:
     def __init__(self, area, total_area, max_seg_area, min_bbox):
