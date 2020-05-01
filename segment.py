@@ -3,6 +3,7 @@ from PIL import Image
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+import os
 
 def rgb_dist(rgb1, rgb2):
     return (rgb1[0]-rgb2[0])**2+(rgb1[1]-rgb2[1])**2+(rgb1[2]-rgb2[2])**2
@@ -28,7 +29,7 @@ def hex2rgb(value):
 
 def getsegment(img,i,j,palette,visited):
     #do bfs to get image segment
-    w,h,d = img.shape
+    h,w,d = img.shape
     col = get_nearest_rgb(img[i][j],palette)
 
     segment = []
@@ -73,21 +74,37 @@ def segment_image(img, palette):
     
 
 def test(img_num):
-    testimg_file = 'test_set/'+str(img_num)+'.png'
-    testimg = np.array(Image.open(testimg_file))
+    testimg_file = os.path.join('test_set2', str(img_num)+'.png')
+    testimg = Image.open(testimg_file)
+    testimg = testimg.convert('RGBA')
+    testimg = np.array(testimg)
     print(testimg.shape)
 
-    palette = ['4F0037', '63386D', '687899', 'D1E6D3', 'ECEDC5']
+    with open(os.path.join('test_set2', 'test.csv')) as file:
+        reader = csv.DictReader(file)
+        palette = None
+        for row in reader:
+            if row['patternId'] == str(img_num):
+                palette = row['palette'].strip().split(' ')
+    
+        if palette is None:
+            print("Bad image ID")
+            exit(2)
+        
+    print(palette)
     img_segmented = segment_image(testimg, palette)
     print(len(img_segmented))
 
-    for segment in img_segmented['687899']:
-        for px in segment:
-            testimg[px[0]][px[1]] = [255,255,255,255]
-    
-    plt.imshow(testimg)
-    plt.show()
+    for color in palette:
+        color_group = testimg.copy()
+
+        for segment in img_segmented[color]:
+            for px in segment:
+                color_group[px[0]][px[1]] = [255,255,255,255]
+        
+        plt.imshow(color_group)
+        plt.show()
 
 
 if __name__ == '__main__':
-    test(2476359)
+    test(931234)
