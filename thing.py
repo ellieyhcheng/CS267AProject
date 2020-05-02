@@ -2,6 +2,8 @@
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
+from segment import preprocess_image, segment_image, get_color_groups
+from cv2 import minAreaRect
 
 # https://docs.pymc.io/
 
@@ -13,9 +15,6 @@ from sklearn.cluster import KMeans
 # https://dritchie.github.io/pdf/patterncolor.pdf
 
 # http://graphics.stanford.edu/projects/patternColoring/
-
-def segment(image):
-    return None
 
 def lightness(color):
     L,a,b = color
@@ -32,8 +31,99 @@ def getbin(color):
     return None
     #returns the discretized bin (bin index) of the color property of the color
 
-def relative_size(pattern):
+def centroid(segment):
+    length = len(segment)
+    s = np.array(segment)
+    sum_x = np.sum(s[:, 0])
+    sum_y = np.sum(s[:, 1])
+    return sum_x/length, sum_y/length
+
+# Spacial features
+def relative_size(segments, color):
+    color_group = segments[color]
+    area = sum([len(s) for s in color_group])
+    group_areas = [sum(len(s) for s in group) for group in segments.values()]
+    max_group_area = max(group_areas)
+    total_area = sum(group_areas)
+    return area,total_area, area/max_group_area
+
+def segment_spread(color_group):
+    centroids = np.array([centroid(s) for s in color_group])
+    return np.cov(centroids)
+
+def segment_size_stats(color_group):
+    sizes = np.array([len(s) for s in color_group])
+    return sizes.min(), sizes.max(), sizes.mean(), sizes.std()
+
+def number_segments(segments, color):
+    num = len(segments[color])
+    total = sum([len(group) for group in segments.values()])
+    return num/total
+
+def relative_size_ind(segment, segments):
+    area = len(segment)
+    segment_areas = [len(s) for s in group for group in segments.values()]
+    total_area = sum(segment_areas)
+    max_segment_area = max(segment_areas)
+    return area/total_area, area/max_segment_area
+
+def num_neighbors(matrix, i, j):
+    width, height = matrix.shape
+    count = 0
+    if (i > 0 and matrix[i-1][j])
+        or (i < height - 1 and matrix[i+1][j])
+        or (j > 0 and matrix[i][j-1])
+        or (j < width - 1 and matrix[i][j+1]):
+        count += 1
+    return count
+
+def normalized_discrete_compactness(width, height, segment):
+    matrix = np.zeros((width, height))
+    for px in segment:
+        matrix[px[0]][px[1]] = 1
     
+    P = 0
+    for i in range(width):
+        for j in range(height):
+            if matrix[i][j]:
+                P += (4 - num_neighbors(matrix, i, j))
+
+    T = 4 # number of sides to a cell
+    n = len(segment)
+    pc = (T*n - P)/2
+    cd = pc
+    cd_min = n - 1
+    cd_max = (T*n - 4 * np.sqrt(n))/2
+    cdn = (cd - cd_min) / (cd_max - cd_min)
+    return cdn
+
+def elongation(segment):
+    rect = minAreaRect(segment)
+    (x,y), (width,height), angle = rect
+    return 1 - width/height
+
+def centrality(width, height, segment):
+    centroid_x, centroid_y = centroid(segment)
+    x, y = width/2, height/2
+    return np.sqrt((x-centroid_x)**2 + (y-centroid_y)**2)
+
+# background = 0, foreground = 1
+def role_labels(segments, palette):
+    labels = {}
+    largest_segments = {}
+    for color in palette:
+        largest_segments[color] = [max([len(s) for s in segments[color]])]
+    background = None
+    for color in palette:
+        if largest_segments[color] > color:
+            background = color 
+    
+    for color in palette:
+        if color == background:
+            labels[color] = 0
+        else:
+            labels[color] = 1
+    return labels
 
 def spatial_features():
     return None

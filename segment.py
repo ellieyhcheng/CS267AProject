@@ -72,13 +72,11 @@ def segment_image(img, palette):
 
     return segments
     
-
-def test(img_num):
+def preprocess_image(img_num):
     testimg_file = os.path.join('test_set2', str(img_num)+'.png')
     testimg = Image.open(testimg_file)
     testimg = testimg.convert('RGBA')
     testimg = np.array(testimg)
-    print(testimg.shape)
 
     with open(os.path.join('test_set2', 'test.csv')) as file:
         reader = csv.DictReader(file)
@@ -90,21 +88,27 @@ def test(img_num):
         if palette is None:
             print("Bad image ID")
             exit(2)
-        
-    print(palette)
-    img_segmented = segment_image(testimg, palette)
-    print(len(img_segmented))
+    return testimg, palette
+
+def get_color_groups(img_num):
+    img, palette = preprocess_image(img_num)
+    segments = segment_image(img, palette)
+    color_groups = {}
 
     for color in palette:
-        color_group = testimg.copy()
-
-        for segment in img_segmented[color]:
+        group = np.full(img.shape, 255)
+        r,g,b = hex2rgb(color)
+        for segment in segments[color]:
             for px in segment:
-                color_group[px[0]][px[1]] = [255,255,255,255]
-        
+                group[px[0]][px[1]] = [r,g,b,255]
+        color_groups[color] = group
+    return color_groups
+
+def test(img_num):        
+    color_groups = get_color_groups(img_num)
+    for color_group in color_groups.values():
         plt.imshow(color_group)
         plt.show()
 
-
 if __name__ == '__main__':
-    test(931234)
+    test(932481)
