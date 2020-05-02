@@ -3,6 +3,12 @@ from PIL import Image
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
+from skimage import color
+
+def lab_dist(rgb1, rgb2):
+    lab1 = color.rgb2lab([[rgb1]])[0][0]
+    lab2 = color.rgb2lab([[rgb2]])[0][0]
+    return (lab1[0]-lab2[0])**2+(lab1[1]-lab2[1])**2+(lab1[2]-lab2[2])**2
 
 def rgb_dist(rgb1, rgb2):
     return (rgb1[0]-rgb2[0])**2+(rgb1[1]-rgb2[1])**2+(rgb1[2]-rgb2[2])**2
@@ -28,7 +34,7 @@ def hex2rgb(value):
 
 def getsegment(img,i,j,palette,visited):
     #do bfs to get image segment
-    w,h,d = img.shape
+    h,w,d = img.shape
     col = get_nearest_rgb(img[i][j],palette)
 
     segment = []
@@ -73,15 +79,28 @@ def segment_image(img, palette):
     
 
 def test(img_num):
-    testimg_file = 'test_set/'+str(img_num)+'.png'
-    testimg = np.array(Image.open(testimg_file))
+    testimg_file = 'test_set2/'+str(img_num)+'.png'
+
+    testimg = Image.open(testimg_file)
+    testimg = testimg.convert('RGBA')
+    testimg = np.array(testimg)
     print(testimg.shape)
 
-    palette = ['4F0037', '63386D', '687899', 'D1E6D3', 'ECEDC5']
+    # testimg = np.array(Image.open(testimg_file))
+    # print(testimg.shape)
+
+    palette = ['F5F1E9', 'D12A2A', '9C1313', '570606', '783535'] #1061 test2
+    #palette = ['87712F', '45201E', 'B8A879', '5D857D', 'FF0F53'] #92013 test2
+    #palette = ['4F0037', '63386D', '687899', 'D1E6D3', 'ECEDC5'] # test1
     img_segmented = segment_image(testimg, palette)
     print(len(img_segmented))
 
-    for segment in img_segmented['687899']:
+    total_segs = 0
+    for col in palette:
+        total_segs += len(img_segmented[col])
+    print(total_segs)
+
+    for segment in img_segmented['F5F1E9']:
         for px in segment:
             testimg[px[0]][px[1]] = [255,255,255,255]
     
@@ -90,4 +109,4 @@ def test(img_num):
 
 
 if __name__ == '__main__':
-    test(2476359)
+    test(1061)
