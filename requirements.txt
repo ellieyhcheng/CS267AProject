@@ -1,0 +1,5 @@
+sklearn
+Pillow
+numpy
+matplotlib
+opencv-python

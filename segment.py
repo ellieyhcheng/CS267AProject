@@ -4,14 +4,10 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 from skimage import color
-
-def lab_dist(rgb1, rgb2):
-    lab1 = color.rgb2lab([[rgb1]])[0][0]
-    lab2 = color.rgb2lab([[rgb2]])[0][0]
-    return (lab1[0]-lab2[0])**2+(lab1[1]-lab2[1])**2+(lab1[2]-lab2[2])**2
+import os
 
 def rgb_dist(rgb1, rgb2):
-    return (rgb1[0]-rgb2[0])**2+(rgb1[1]-rgb2[1])**2+(rgb1[2]-rgb2[2])**2
+    return (int(rgb1[0])-int(rgb2[0]))**2+(int(rgb1[1])-int(rgb2[1]))**2+(int(rgb1[2])-int(rgb2[2]))**2
 
 def hex_dist(hex1, hex2):
     return rgb_dist(hex2rgb(hex1),hex2rgb(hex2))
@@ -32,10 +28,34 @@ def hex2rgb(value):
     lv = len(value)
     return tuple(int(value[i:i+lv//3], 16) for i in range(0, lv, lv//3))
 
+def get_color(img,i,j,palette):
+    #gets hex value in palette of nearest color in 8 neighboring pixels
+    h,w,d = img.shape
+    c1 = img[i][j]
+    c1hex = rgb2hex((c1[0],c1[1],c1[2]))
+    if c1hex in palette:
+        return c1hex
+    colors = []
+    distances = []
+
+    for a in range(-1,2):
+        for b in range(-1,2):
+            if (a == 0 and b == 0) or i+a < 0 or i+a >= h or j+b < 0 or j+b >= w :
+                continue
+            c2 = img[i+a][j+b]
+            colors.append(c2)
+            d = rgb_dist(c1,c2)
+            distances.append(d)
+    
+    n_rgb = colors[distances.index(min(distances))]
+    
+    return get_nearest_hex(rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2])),palette)
+
 def getsegment(img,i,j,palette,visited):
     #do bfs to get image segment
     h,w,d = img.shape
-    col = get_nearest_rgb(img[i][j],palette)
+    # col = get_nearest_rgb(img[i][j],palette)
+    col = get_color(img,i,j,palette)
 
     segment = []
     q = []
@@ -45,16 +65,20 @@ def getsegment(img,i,j,palette,visited):
         pi,pj = q.pop(0)
         segment.append((pi,pj))
         
-        if pi > 0 and (pi-1,pj) not in visited and get_nearest_rgb(img[pi-1][pj],palette) == col:
+        # if pi > 0 and (pi-1,pj) not in visited and get_nearest_rgb(img[pi-1][pj],palette) == col:
+        if pi > 0 and (pi-1,pj) not in visited and get_color(img,pi-1,pj,palette) == col:
             q.append((pi-1,pj))
             visited.add((pi-1,pj))
-        if pi+1 < h and (pi+1,pj) not in visited and get_nearest_rgb(img[pi+1][pj],palette) == col:
+        # if pi+1 < h and (pi+1,pj) not in visited and get_nearest_rgb(img[pi+1][pj],palette) == col:
+        if pi+1 < h and (pi+1,pj) not in visited and get_color(img,pi+1,pj,palette) == col:
             q.append((pi+1,pj))
             visited.add((pi+1,pj))
-        if pj > 0 and (pi,pj-1) not in visited and get_nearest_rgb(img[pi][pj-1],palette) == col:
+        # if pj > 0 and (pi,pj-1) not in visited and get_nearest_rgb(img[pi][pj-1],palette) == col:
+        if pj > 0 and (pi,pj-1) not in visited and get_color(img,pi,pj-1,palette) == col:
             q.append((pi,pj-1))
             visited.add((pi,pj-1))
-        if pj+1 < w and (pi,pj+1) not in visited and get_nearest_rgb(img[pi][pj+1],palette) == col:
+        # if pj+1 < w and (pi,pj+1) not in visited and get_nearest_rgb(img[pi][pj+1],palette) == col:
+        if pj+1 < w and (pi,pj+1) not in visited and get_color(img,pi,pj+1,palette) == col:
             q.append((pi,pj+1))
             visited.add((pi,pj+1))
     return segment
@@ -77,36 +101,43 @@ def segment_image(img, palette):
 
     return segments
     
-
-def test(img_num):
-    testimg_file = 'test_set2/'+str(img_num)+'.png'
-
+def preprocess_image(img_num):
+    testimg_file = os.path.join('test_set2', str(img_num)+'.png')
     testimg = Image.open(testimg_file)
     testimg = testimg.convert('RGBA')
     testimg = np.array(testimg)
-    print(testimg.shape)
 
-    # testimg = np.array(Image.open(testimg_file))
-    # print(testimg.shape)
-
-    palette = ['F5F1E9', 'D12A2A', '9C1313', '570606', '783535'] #1061 test2
-    #palette = ['87712F', '45201E', 'B8A879', '5D857D', 'FF0F53'] #92013 test2
-    #palette = ['4F0037', '63386D', '687899', 'D1E6D3', 'ECEDC5'] # test1
-    img_segmented = segment_image(testimg, palette)
-    print(len(img_segmented))
-
-    total_segs = 0
-    for col in palette:
-        total_segs += len(img_segmented[col])
-    print(total_segs)
-
-    for segment in img_segmented['F5F1E9']:
-        for px in segment:
-            testimg[px[0]][px[1]] = [255,255,255,255]
+    with open(os.path.join('test_set2', 'test.csv')) as file:
+        reader = csv.DictReader(file)
+        palette = None
+        for row in reader:
+            if row['patternId'] == str(img_num):
+                palette = row['palette'].strip().split(' ')
     
-    plt.imshow(testimg)
-    plt.show()
+        if palette is None:
+            print("Bad image ID")
+            exit(2)
+    return testimg, palette
 
+def get_color_groups(img_num):
+    img, palette = preprocess_image(img_num)
+    segments = segment_image(img, palette)
+    color_groups = {}
+
+    for color in palette:
+        group = np.full(img.shape, 255)
+        r,g,b = hex2rgb(color)
+        for segment in segments[color]:
+            for px in segment:
+                group[px[0]][px[1]] = [r,g,b,255]
+        color_groups[color] = group
+    return color_groups
+
+def test(img_num):        
+    color_groups = get_color_groups(img_num)
+    for color_group in color_groups.values():
+        plt.imshow(color_group)
+        plt.show()
 
 if __name__ == '__main__':
-    test(1061)
+    test(932481)
