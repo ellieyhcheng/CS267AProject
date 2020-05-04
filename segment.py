@@ -43,13 +43,17 @@ def get_color(img,i,j,palette):
             if (a == 0 and b == 0) or i+a < 0 or i+a >= h or j+b < 0 or j+b >= w :
                 continue
             c2 = img[i+a][j+b]
+            # if rgb2hex((c2[0],c2[1],c2[2])) not in palette:
+            #     continue
             colors.append(c2)
             d = rgb_dist(c1,c2)
             distances.append(d)
-    
+    # if len(distances) == 0:
+    #     return get_nearest_hex(c1hex,palette)
     n_rgb = colors[distances.index(min(distances))]
+    return rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2]))
     
-    return get_nearest_hex(rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2])),palette)
+    # return get_nearest_hex(rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2])),palette)
 
 def getsegment(img,i,j,palette,visited):
     #do bfs to get image segment
