@@ -3,3 +3,4 @@ test_set2*
 .DS_Store
 .vscode
 __pycache__
+*.pickle

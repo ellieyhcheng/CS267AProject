@@ -9,6 +9,7 @@ from skimage.color import rgb2lab
 import csv
 from PIL import Image
 import os
+import pickle
 
 # https://docs.pymc.io/
 
@@ -182,7 +183,7 @@ class Histogram:
         # for idx, cp in enumerate(color_property):
         #     y_train[idx][cp]
         y_train = np.array([getbin(kmeans, cp) for cp in color_property])
-        self.clf = LogisticRegression(multi_class='multinomial')
+        self.clf = LogisticRegression(multi_class='multinomial', max_iter=1000)
         self.clf.fit(x_train,y_train)
 
         # for b in kmeans.cluster_centers_:
@@ -249,38 +250,46 @@ def score_grp(color_property, area, pred_property, histogram): #phi
 
 def main():
     # list of list of colorgroups
-    all_color_groups = []
-    with open(os.path.join('test_set2', 'test.csv')) as csvfile:
-        reader = csv.DictReader(csvfile)
-        count = 0
-        for row in reader:
-            # print("hello", count)
-            if count == 500:
-                break
-            count += 1
-            img_num = row['patternId']
-            palette = row['palette'].strip().split(' ')
-            # print(img_num)
-            testimg_file = os.path.join('test_set2', str(img_num)+'.png')
-            img = Image.open(testimg_file)
-            img = img.convert('RGBA')
-            img = np.array(img)
- 
-            height,width,d = img.shape
-            # print("Start segmenting...")
-            segments = segment_image(img, palette)
+    if os.path.exists('colorgroup.pickle'):
+        with open('colorgroup.pickle', 'rb') as pf:
+            all_color_groups = pickle.load(pf)
+    else: 
+        with open('colorgroup.pickle', 'wb') as pf:
+            all_color_groups = []
+            with open(os.path.join('test_set2', 'test.csv')) as csvfile:
+                reader = csv.DictReader(csvfile)
+                count = 0
+                for row in reader:
+                    # print("hello", count)
+                    if count == 100:
+                        break
+                    count += 1
+                    img_num = row['patternId']
+                    palette = row['palette'].strip().split(' ')
+                    # print(img_num)
+                    testimg_file = os.path.join('test_set2', str(img_num)+'.png')
+                    with Image.open(testimg_file) as imgfile:
+                        img = imgfile.convert('RGBA')
+                        img = np.array(img)
 
-            new_palette = []
-            for color in palette:
-                if len(segments[color]) == 0:
-                    segments.pop(color, None)
-                else:
-                    new_palette.append(color)
+                    height,width,d = img.shape
+                    # print("Start segmenting...")
+                    segments = segment_image(img, palette)
 
-            # print("Finish segmenting...")
-            labels = role_labels(segments)
-            color_groups = [ColorGroup(segments, color, width, height, labels[color]) for color in new_palette]
-            all_color_groups += color_groups
+                    new_palette = []
+                    for color in palette:
+                        if len(segments[color]) == 0:
+                            segments.pop(color, None)
+                        else:
+                            new_palette.append(color)
+
+                    # print("Finish segmenting...")
+                    labels = role_labels(segments)
+                    color_groups = [ColorGroup(segments, color, width, height, labels[color]) for color in new_palette]
+                    all_color_groups += color_groups
+
+            pickle.dump(all_color_groups, pf, protocol=4)
+            
     
     print("Start training...")
     lightness_histogram = Histogram()
