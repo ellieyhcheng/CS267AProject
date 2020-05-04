@@ -3,7 +3,7 @@ from PIL import Image
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
-from skimage import color
+# from skimage import color
 import os
 
 def rgb_dist(rgb1, rgb2):
@@ -140,4 +140,4 @@ def test(img_num):
         plt.show()
 
 if __name__ == '__main__':
-    test(932481)
+    test(636382)

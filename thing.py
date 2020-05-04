@@ -2,8 +2,13 @@
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
-from segment import preprocess_image, segment_image, get_color_groups
+from sklearn.preprocessing import OneHotEncoder
+from segment import segment_image, get_color_groups, hex2rgb
 from cv2 import minAreaRect
+from skimage.color import rgb2lab
+import csv
+from PIL import Image
+import os
 
 # https://docs.pymc.io/
 
@@ -17,18 +22,33 @@ from cv2 import minAreaRect
 # http://graphics.stanford.edu/projects/patternColoring/
 
 def lightness(color):
-    L,a,b = color
+    # L,a,b = color
+    L = color[0]
+    a = color[1]
+    b = color[2]
     return L
 
 def saturation(color):
-    L,a,b = color
-    return np.sqrt(a**2+b**2)/np.sqrt(a**2+b**2+L**2)
+    # print(color)
+    # L,a,b = color
+    L = color[0]
+    a = color[1]
+    b = color[2]
+    # print(L,a,b)
+    # print(np.sqrt(a**2+b**2), np.sqrt(a**2+b**2+L**2))
+    if np.sqrt(a**2+b**2+L**2) == 0.0:
+        return 0.0
+    return np.sqrt(a**2+b**2)/(np.sqrt(a**2+b**2+L**2))
 
 def color_property(color):
     return (lightness(color),saturation(color))
 
-def getbin(color):
-    return None
+def discretize_color_property(color_property_values):
+    kmeans = KMeans(n_clusters=10).fit(np.array(color_property_values).reshape(-1, 1))
+    return kmeans
+
+def getbin(kmeans, color_property):
+    return kmeans.predict(np.array(color_property).reshape(-1,1))
     #returns the discretized bin (bin index) of the color property of the color
 
 def centroid(segment):
@@ -38,7 +58,7 @@ def centroid(segment):
     sum_y = np.sum(s[:, 1])
     return sum_x/length, sum_y/length
 
-# Spacial features
+# Spatial features       
 def relative_size(segments, color):
     color_group = segments[color]
     area = sum([len(s) for s in color_group])
@@ -49,7 +69,7 @@ def relative_size(segments, color):
 
 def segment_spread(color_group):
     centroids = np.array([centroid(s) for s in color_group])
-    return np.cov(centroids)
+    return np.cov(centroids).flatten()
 
 def segment_size_stats(color_group):
     sizes = np.array([len(s) for s in color_group])
@@ -62,31 +82,31 @@ def number_segments(segments, color):
 
 def relative_size_ind(segment, segments):
     area = len(segment)
-    segment_areas = [len(s) for s in group for group in segments.values()]
+    # segment_areas = []
+    # for group in segments.values:
+    segment_areas = [len(s) for group in segments.values() for s in group]
     total_area = sum(segment_areas)
     max_segment_area = max(segment_areas)
     return area/total_area, area/max_segment_area
 
 def num_neighbors(matrix, i, j):
-    width, height = matrix.shape
+    height, width = matrix.shape
     count = 0
-    if (i > 0 and matrix[i-1][j])
-        or (i < height - 1 and matrix[i+1][j])
-        or (j > 0 and matrix[i][j-1])
-        or (j < width - 1 and matrix[i][j+1]):
+    if (i > 0 and matrix[i-1][j]) or (i < height - 1 and matrix[i+1][j]) or (j > 0 and matrix[i][j-1]) or (j < width - 1 and matrix[i][j+1]):
         count += 1
     return count
 
 def normalized_discrete_compactness(width, height, segment):
-    matrix = np.zeros((width, height))
+    matrix = np.zeros((height, width))
+    # print('seg', segment)
     for px in segment:
         matrix[px[0]][px[1]] = 1
     
     P = 0
-    for i in range(width):
-        for j in range(height):
-            if matrix[i][j]:
-                P += (4 - num_neighbors(matrix, i, j))
+    # for i in range(height):
+    #     for j in range(width):
+    for px in segment:
+        P += (4 - num_neighbors(matrix, px[0], px[1]))
 
     T = 4 # number of sides to a cell
     n = len(segment)
@@ -94,12 +114,16 @@ def normalized_discrete_compactness(width, height, segment):
     cd = pc
     cd_min = n - 1
     cd_max = (T*n - 4 * np.sqrt(n))/2
-    cdn = (cd - cd_min) / (cd_max - cd_min)
+    cdn = (cd - cd_min) / (cd_max - cd_min + 1)
     return cdn
 
-def elongation(segment):
-    rect = minAreaRect(segment)
-    (x,y), (width,height), angle = rect
+def elongation(segment): # 8=D -> 8=====D haha >:)
+    # rect = minAreaRect(segment)
+    # (x,y), (width,height), angle = rect
+    x = [px[0] for px in segment]
+    y = [px[1] for px in segment]
+    width = max(x) - min(x)+1
+    height = max(y) - min(y)+1
     return 1 - width/height
 
 def centrality(width, height, segment):
@@ -108,14 +132,16 @@ def centrality(width, height, segment):
     return np.sqrt((x-centroid_x)**2 + (y-centroid_y)**2)
 
 # background = 0, foreground = 1
-def role_labels(segments, palette):
+def role_labels(segments):
     labels = {}
     largest_segments = {}
+    palette = list(segments.keys())
     for color in palette:
-        largest_segments[color] = [max([len(s) for s in segments[color]])]
-    background = None
+        largest_segments[color] = max([len(s) for s in segments[color]])
+
+    background = palette[0]
     for color in palette:
-        if largest_segments[color] > color:
+        if largest_segments[color] > largest_segments[background]:
             background = color 
     
     for color in palette:
@@ -124,9 +150,6 @@ def role_labels(segments, palette):
         else:
             labels[color] = 1
     return labels
-
-def spatial_features():
-    return None
 
 # Properties of color relationship between two adjacent regions
 def perceptual_diff(c1, c2):
@@ -145,57 +168,128 @@ def relative_saturation(c1, c2):
 def chromatic_difference(c1, c2):
     pass
 
-
-def discretizePi(color_property_values):
-    kmeans = KMeans(n_clusters=10).fit(color_property_values)
-    return kmeans
-
-class histogram_thingy():
+class Histogram:
     def __init__(self):
         pass
-
-    def train(self, x_train, y_train):
-        # get spatial and color properties
-        x_train = [spatial_features(x) for x in x_train]
-        y_train = [getbin(color) for y in y_train]
-        self.clf = LogisticRegression(multiclass='multinomial')
+    
+    # spatial_properties = [np.array(x.spatial_property) for x in color_groups]
+    # color_property = [x.color_property[lightness or saturation] for x in color_groups]
+    def train(self, spatial_properties, color_property):
+        kmeans = discretize_color_property(color_property)
+        x_train = np.array(spatial_properties)
+        color_property = np.array(color_property)
+        y_train = np.array((color_property.shape[0],10))
+        # for idx, cp in enumerate(color_property):
+        #     y_train[idx][cp]
+        y_train = np.array([getbin(kmeans, cp) for cp in color_property])
+        self.clf = LogisticRegression(multi_class='multinomial')
         self.clf.fit(x_train,y_train)
 
     def get_histogram(self, x):
-        return self.clf.decision_function(x)
+        return self.clf.predict_proba(x)
 
 class ColorGroup:
-    def __init__(self):
-        pass
+    # u get a map from color to list of segments where each segment is jsut a list of coordinates of that segment
+    # like {'FFFFFF' : [[(0,0),(0,1)...] , [(10,10),(10,11)...], ...],
+    #       '123455' : [[]]}
+    # so u just pass in each of the colors and then for each color, u make a bunch of ColorGroupSegments
+    # its a map from color to a list of lists
+    def __init__(self, segments, color, pattern_width, pattern_height, label):
+        r,g,b = hex2rgb(color)
+        rgb = [[[r/255,g/255,b/255]]]
+        self.lightness = lightness(rgb2lab(rgb)[0][0])
+        self.saturation = saturation(rgb2lab(rgb)[0][0])
+        self.color_property = (self.lightness, self.saturation)
+        
+        self.color = color # in hex
+        self.segments = segments[color]
+        self.pattern_width = pattern_width
+        self.pattern_height = pattern_height
+        self.area = sum([len(s) for s in self.segments])
+
+        self.relative_size_to_pattern = relative_size(segments,color)[0]
+        self.relative_size_to_max_group =relative_size(segments,color)[1]
+        self.segment_spread = segment_spread(self.segments)
+        self.label = label
+        
+        self.color_groups = [ColorGroupSegment(seg, segments,color, pattern_width, pattern_height, label) for seg in self.segments]
+
+        # Segment size statistics
+        self.min_segment_size, self.max_segment_size, self.mean_segment_size, self.std_segment_size = segment_size_stats(self.segments)
+        
+        self.spatial_property = np.array([self.relative_size_to_pattern, self.relative_size_to_max_group, self.label, self.min_segment_size, self.max_segment_size, self.mean_segment_size, self.std_segment_size])
+        # self.spatial_property = np.concatenate((self.spatial_property, self.segment_spread))
+        
 
 # Individual segments within a color group
-class ColorGroupSegment:
-    def __init__(self, area, total_area, max_seg_area, min_bbox):
-        self.relative_size_to_pattern = area / total area
-        self.relative_size_to_max_seg = area / max_seg_area
-        box_width, box_height = min_bbox
-        self.elongation = 1 - (box_width / box_height)
+class ColorGroupSegment: #shouldnt u just pass in the list of coordinates and then call ur functions inside this init
+    def __init__(self, segment, segments, color, pattern_width, pattern_height,label):
+        self.color = color
+        self.segment = segment
+        r,g,b = hex2rgb(color)
+        rgb = [[[r/255,g/255,b/255]]]
+        self.lightness = lightness(rgb2lab(rgb)[0][0])
+        self.saturation = saturation(rgb2lab(rgb)[0][0])
+        self.color_property = (self.lightness, self.saturation)
 
-        self.spatial_features = (self.relative_size_to_pattern, self.relative_size_to_max_seg, self.elongation)
-        
-        self.color_properties = () 
+        self.relative_size = relative_size_ind(segment,segments)
+        self.num_neighbors = normalized_discrete_compactness(pattern_width, pattern_height, segment)
+        self.elongation = elongation(segment)
+        self.label = label # foreground = 1, background = 0
+        self.centrality = centrality(pattern_width, pattern_height, segment)
 
-def score_grp(cg): #phi
-    pass
+        self.spacial_property = (self.relative_size, self.num_neighbors, self.elongation, self.label, self.centrality)
 
-def score_adj(cg1, cg2): 
-    return 
-
-def OD_compat(c1,c2,c3,c4,c5):
-    #O'Donovan color compatibility model
-    return 5
-
-def score_compat(c1,c2,c3,c4,c5):
-    return np.log(OD_compat(c1,c2,c3,c4,c5)/5)
+def score_grp(color_property, area, pred_property, histogram): #phi
+    p = histogram[getbin(discretize_color_property(color_property), pred_property)[0]]
+    return np.log(p) * area
 
 def main():
-    h = histogram_thingy()
-    pass
+    # list of list of colorgroups
+    all_color_groups = []
+    with open(os.path.join('test_set2', 'test.csv')) as csvfile:
+        reader = csv.DictReader(csvfile)
+        count = 0
+        for row in reader:
+            print("hello", count)
+            if count == 100:
+                break
+            count += 1
+            img_num = row['patternId']
+            palette = row['palette'].strip().split(' ')
+            print(img_num)
+            testimg_file = os.path.join('test_set2', str(img_num)+'.png')
+            img = Image.open(testimg_file)
+            img = img.convert('RGBA')
+            img = np.array(img)
+ 
+            height,width,d = img.shape
+            print("Start segmenting...")
+            segments = segment_image(img, palette)
+            print("Finish segmenting...")
+            labels = role_labels(segments)
+            color_groups = [ColorGroup(segments, color, width, height, labels[color]) for color in palette]
+            all_color_groups += color_groups
+    
+    print("Start training...")
+    lightness_histogram = Histogram()
+    spatial_properties = [np.array(x.spatial_property) for x in all_color_groups]
+    lightness = [x.color_property[0] for x in all_color_groups]
+    lightness_histogram.train(spatial_properties, lightness)
+    print("Lightness Histogram done...")
+
+    saturation_histogram = Histogram()
+    saturation = [x.color_property[1] for x in all_color_groups]
+    saturation_histogram.train(spatial_properties, saturation)
+    print("hello1")
+    # unary scores for a specific color group
+    cg = all_color_groups[0]
+    lh = lightness_histogram.get_histogram(cg.spatial_property.reshape(1, -1))
+    lightness_score = score_grp(lightness, cg.area, cg.lightness, lh[0])
+    sh = saturation_histogram.get_histogram(cg.spatial_property.reshape(1, -1))
+    saturation_score = score_grp(saturation, cg.area, cg.saturation, sh[0])
+    print("Lightness Score: ", lightness_score)
+    print("Saturation Score: ", saturation_score)
 
 if __name__ == '__main__':
     main()
