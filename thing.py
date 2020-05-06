@@ -179,18 +179,16 @@ class Histogram:
         kmeans = discretize_color_property(color_property)
         x_train = np.array(spatial_properties)
         color_property = np.array(color_property)
-        y_train = np.array((color_property.shape[0],10))
+        # y_train = np.array((color_property.shape[0],10))
         # for idx, cp in enumerate(color_property):
         #     y_train[idx][cp]
         y_train = np.array([getbin(kmeans, cp) for cp in color_property])
-        self.clf = LogisticRegression(multi_class='multinomial', max_iter=1000)
+        self.clf = LogisticRegression(multi_class='multinomial', max_iter=10000)
         self.clf.fit(x_train,y_train)
-
-        # for b in kmeans.cluster_centers_:
-
+        return self.clf.score(x_train,y_train)
 
     def get_histogram(self, x):
-        return self.clf.predict_proba(x)[0]
+        return self.clf.predict_proba(x)[0] 
 
 class ColorGroup:
     # u get a map from color to list of segments where each segment is jsut a list of coordinates of that segment
@@ -249,20 +247,21 @@ def score_grp(color_property, area, pred_property, histogram): #phi
     return np.log(p) * area, p
 
 def main():
+    processing = False
+    count = 1600
+    end = 1796
+
     # list of list of colorgroups
-    if os.path.exists('colorgroup.pickle'):
-        with open('colorgroup.pickle', 'rb') as pf:
-            all_color_groups = pickle.load(pf)
-    else: 
-        with open('colorgroup.pickle', 'wb') as pf:
-            all_color_groups = []
+    if processing:
+        all_color_groups = []
+        with open('colorgroup.pickle', 'ab') as pf:
             with open(os.path.join('test_set2', 'test.csv')) as csvfile:
-                reader = csv.DictReader(csvfile)
-                count = 0
-                for row in reader:
+                reader = list(csv.DictReader(csvfile))
+                while count != end and count < len(reader):
+                    row = reader[count]
                     # print("hello", count)
-                    if count == 100:
-                        break
+                    if count % 100 == 0:
+                        print("Finished", count, "Color groups")
                     count += 1
                     img_num = row['patternId']
                     palette = row['palette'].strip().split(' ')
@@ -287,10 +286,20 @@ def main():
                     labels = role_labels(segments)
                     color_groups = [ColorGroup(segments, color, width, height, labels[color]) for color in new_palette]
                     all_color_groups += color_groups
+                    pickle.dump(color_groups, pf, protocol=4)
 
-            pickle.dump(all_color_groups, pf, protocol=4)
+            print("Finished all color groups...")
             
-    
+    else:
+        all_color_groups = []
+        with open('colorgroup.pickle', 'rb') as pf:
+            while 1:
+                try:
+                    all_color_groups += (pickle.load(pf))
+                except EOFError:
+                    break
+    print(len(all_color_groups))
+
     print("Start training...")
     lightness_histogram = Histogram()
     spatial_properties = [np.array(x.spatial_property) for x in all_color_groups]
@@ -298,29 +307,31 @@ def main():
     scaled_sp = scaler.transform(spatial_properties)
 
     lightness = [x.color_property[0] for x in all_color_groups]
-    lightness_histogram.train(scaled_sp, lightness)
+    lacc = lightness_histogram.train(scaled_sp, lightness)
     print("Lightness Histogram done...")
 
     saturation_histogram = Histogram()
     saturation = [x.color_property[1] for x in all_color_groups]
-    saturation_histogram.train(scaled_sp, saturation)
-    print("Saturation Histogram done...\n")
-
+    sacc = saturation_histogram.train(scaled_sp, saturation)
+    print("Saturation Histogram done...")
     # unary scores for a specific color group
     cg = all_color_groups[0]
-    print(cg.color)
-
     scaled_cgsp = scaler.transform(cg.spatial_property.reshape(1, -1))
 
     lh = lightness_histogram.get_histogram(scaled_cgsp)
-    lightness_score = score_grp(lightness, cg.area, cg.lightness, lh)
-    print("Lightness probs: ", lightness_score[1], " of ", lh)
+    lightness_score,lp = score_grp(lightness, cg.area, cg.lightness, lh)
     sh = saturation_histogram.get_histogram(scaled_cgsp)
-    saturation_score = score_grp(saturation, cg.area, cg.saturation, sh)
-    print("Saturation probs: ", saturation_score[1], " of ",  sh)
+    saturation_score, sp = score_grp(saturation, cg.area, cg.saturation, sh)
+    print("Lightness:")
+    print("Prob:", lp, "out of", lh)
+    print("Score:", lightness_score)
+    print("Total Accuracy:", lacc)
 
-    print("Lightness probability: ", lightness_score[0])
-    print("Saturation probability: ", saturation_score[0])
+    print()
+
+    print("Saturation Prob:", sp, "out of", sh)
+    print("Saturation Score:", saturation_score)
+    print("Total Accuracy:", sacc)
 
 if __name__ == '__main__':
     main()
