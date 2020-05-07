@@ -2,7 +2,8 @@
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, MinMaxScaler
+from sklearn.neighbors import KernelDensity
 from segment import segment_image, get_color_groups, hex2rgb
 from cv2 import minAreaRect
 from skimage.color import rgb2lab
@@ -10,6 +11,7 @@ import csv
 from PIL import Image
 import os
 import pickle
+import matplotlib.pyplot as plt
 
 # https://docs.pymc.io/
 
@@ -176,19 +178,24 @@ class Histogram:
     # spatial_properties = [np.array(x.spatial_property) for x in color_groups]
     # color_property = [x.color_property[lightness or saturation] for x in color_groups]
     def train(self, spatial_properties, color_property):
-        kmeans = discretize_color_property(color_property)
+        self.kmeans = discretize_color_property(color_property)
         x_train = np.array(spatial_properties)
         color_property = np.array(color_property)
         # y_train = np.array((color_property.shape[0],10))
         # for idx, cp in enumerate(color_property):
         #     y_train[idx][cp]
-        y_train = np.array([getbin(kmeans, cp) for cp in color_property])
+        y_train = np.array([getbin(self.kmeans, cp) for cp in color_property])
         self.clf = LogisticRegression(multi_class='multinomial', max_iter=10000)
         self.clf.fit(x_train,y_train)
         return self.clf.score(x_train,y_train)
 
     def get_histogram(self, x):
         return self.clf.predict_proba(x)[0] 
+
+    def get_range(self):
+        scaler = MinMaxScaler()
+        scaler.fit(self.kmeans.cluster_centers_)
+        return scaler.transform(self.kmeans.cluster_centers_).reshape(1,-1)[0]
 
 class ColorGroup:
     # u get a map from color to list of segments where each segment is jsut a list of coordinates of that segment
@@ -248,6 +255,7 @@ def main():
     count = 1600
     end = 1800
     pickle_file = 'colorgroup_lite.pickle'
+    color_group_tests = [0,10,15]
 
     # list of list of colorgroups
     if processing:
@@ -313,23 +321,67 @@ def main():
     sacc = saturation_histogram.train(scaled_sp, saturation)
     print("Saturation Histogram done...")
     # unary scores for a specific color group
-    cg = all_color_groups[0]
-    scaled_cgsp = scaler.transform(cg.spatial_property.reshape(1, -1))
 
-    lh = lightness_histogram.get_histogram(scaled_cgsp)
-    lightness_score,lp = score_grp(lightness, cg.area, cg.color_property[0], lh)
-    sh = saturation_histogram.get_histogram(scaled_cgsp)
-    saturation_score, sp = score_grp(saturation, cg.area, cg.color_property[1], sh)
-    print("Lightness:")
-    print("Prob:", lp, "out of", lh)
-    print("Score:", lightness_score)
-    print("Total Accuracy:", lacc)
+    for i in color_group_tests:
+        cg = all_color_groups[i]
+        print('Results for', cg.color)
+        scaled_cgsp = scaler.transform(cg.spatial_property.reshape(1, -1))
 
-    print()
+        lh = lightness_histogram.get_histogram(scaled_cgsp)
+        lightness_score,lp = score_grp(lightness, cg.area, cg.color_property[0], lh)
+        lv = lightness_histogram.get_range()
+        print("Lightness:")
+        print("Prob:", lp, "out of", lh)
+        print("Score:", lightness_score)
+        print("Total Accuracy:", lacc)
 
-    print("Saturation Prob:", sp, "out of", sh)
-    print("Saturation Score:", saturation_score)
-    print("Total Accuracy:", sacc)
+        print()
+        
+        sh = saturation_histogram.get_histogram(scaled_cgsp)
+        saturation_score, sp = score_grp(saturation, cg.area, cg.color_property[1], sh)
+        sv = saturation_histogram.get_range()
+        print("Saturation Prob:", sp, "out of", sh)
+        print("Saturation Score:", saturation_score)
+        print("Total Accuracy:", sacc)
+
+        
+        l_ind = lv.argsort()
+        lv = lv[l_ind]
+        lh = lh[l_ind]
+        s_ind = sv.argsort()
+        sv = sv[s_ind]
+        sh = sh[s_ind]
+
+        fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(16,8))
+        ax[0][0].bar(lv, lh, width=0.1)
+        ax[0][0].set_title('Lightness')
+        ax[0][0].set_ylabel('Probability')
+        ax[0][0].set_yticks(np.arange(0,0.5,0.1))
+        ax[0][0].set_xticks(np.around(lv, decimals=2))
+
+        ax[0][1].bar(sv, sh, width=0.1)
+        ax[0][1].set_title('Saturation')
+        ax[0][1].set_ylabel('Probability')
+        ax[0][1].set_yticks(np.arange(0,0.5,0.1))
+        ax[0][1].set_xticks(np.around(sv, decimals=2))
+
+        l_data = np.concatenate((lv.reshape(-1,1), lh.reshape(-1,1)), axis=1)
+        print(l_data)
+        l_kde = KernelDensity(bandwidth=0.11, kernel='gaussian').fit(l_data[:,0].reshape(-1,1), sample_weight=l_data[:,1])
+
+        x=np.linspace(0, 1, 100)
+        l_log_dens = l_kde.score_samples(x.reshape(-1,1))
+        ax[1][0].plot(x, np.exp(l_log_dens))
+        # ax[0].set_yticks(np.arange(0,0.5,0.1))
+
+        s_data = np.concatenate((sv.reshape(-1,1), sh.reshape(-1,1)), axis=1)
+        print(s_data)
+        s_kde = KernelDensity(bandwidth=0.11, kernel='gaussian').fit(s_data[:,0].reshape(-1,1), sample_weight=s_data[:,1])
+        s_log_dens = s_kde.score_samples(x.reshape(-1,1))
+        ax[1][1].plot(x, np.exp(s_log_dens))
+        # ax[1].set_yticks(np.arange(0,0.5,0.1))
+        plt.show()
+
 
 if __name__ == '__main__':
     main()
