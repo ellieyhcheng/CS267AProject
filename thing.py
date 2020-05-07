@@ -199,48 +199,45 @@ class ColorGroup:
     def __init__(self, segments, color, pattern_width, pattern_height, label):
         r,g,b = hex2rgb(color)
         rgb = [[[r/255,g/255,b/255]]]
-        self.lightness = lightness(rgb2lab(rgb)[0][0])
-        self.saturation = saturation(rgb2lab(rgb)[0][0])
-        self.color_property = (self.lightness, self.saturation)
+        light = lightness(rgb2lab(rgb)[0][0])
+        sat = saturation(rgb2lab(rgb)[0][0])
+        self.color_property = (light, sat)
         
         self.color = color # in hex
-        self.segments = segments[color]
-        self.pattern_width = pattern_width
-        self.pattern_height = pattern_height
-        self.area = sum([len(s) for s in self.segments])
+        color_segments = segments[color]
+        self.area = sum([len(s) for s in color_segments])
 
-        self.relative_size_to_pattern = relative_size(segments,color)[0]
-        self.relative_size_to_max_group =relative_size(segments,color)[1]
-        self.segment_spread = segment_spread(self.segments)
-        self.label = label
+        relative_size_to_pattern = relative_size(segments,color)[0]
+        relative_size_to_max_group =relative_size(segments,color)[1]
+        seg_spread = segment_spread(color_segments)
+        label = label
         
-        self.color_groups = [ColorGroupSegment(seg, segments,color, pattern_width, pattern_height, label) for seg in self.segments]
+        self.color_groups = [ColorGroupSegment(seg, segments,color, pattern_width, pattern_height, label) for seg in color_segments]
 
         # Segment size statistics
-        self.min_segment_size, self.max_segment_size, self.mean_segment_size, self.std_segment_size = segment_size_stats(self.segments)
+        min_segment_size, max_segment_size, mean_segment_size, std_segment_size = segment_size_stats(color_segments)
         
-        self.spatial_property = np.array([self.relative_size_to_pattern, self.relative_size_to_max_group, self.label, self.min_segment_size, self.max_segment_size, self.mean_segment_size, self.std_segment_size])
-        # self.spatial_property = np.concatenate((self.spatial_property, self.segment_spread))
+        self.spatial_property = np.array([relative_size_to_pattern, relative_size_to_max_group, label, min_segment_size, max_segment_size, mean_segment_size, std_segment_size])
+        # self.spatial_property = np.concatenate((self.spatial_property, self.seg_spread))
         
 
 # Individual segments within a color group
 class ColorGroupSegment: #shouldnt u just pass in the list of coordinates and then call ur functions inside this init
     def __init__(self, segment, segments, color, pattern_width, pattern_height,label):
         self.color = color
-        self.segment = segment
         r,g,b = hex2rgb(color)
         rgb = [[[r/255,g/255,b/255]]]
-        self.lightness = lightness(rgb2lab(rgb)[0][0])
-        self.saturation = saturation(rgb2lab(rgb)[0][0])
-        self.color_property = (self.lightness, self.saturation)
+        light = lightness(rgb2lab(rgb)[0][0])
+        sat = saturation(rgb2lab(rgb)[0][0])
+        self.color_property = (light, sat)
 
-        self.relative_size = relative_size_ind(segment,segments)
-        self.num_neighbors = normalized_discrete_compactness(pattern_width, pattern_height, segment)
-        self.elongation = elongation(segment)
-        self.label = label # foreground = 1, background = 0
-        self.centrality = centrality(pattern_width, pattern_height, segment)
+        relative_size = relative_size_ind(segment,segments)
+        num_neighbors = normalized_discrete_compactness(pattern_width, pattern_height, segment)
+        elon = elongation(segment)
+        label = label # foreground = 1, background = 0
+        cent = centrality(pattern_width, pattern_height, segment)
 
-        self.spacial_property = (self.relative_size, self.num_neighbors, self.elongation, self.label, self.centrality)
+        self.spacial_property = (relative_size, num_neighbors, elon, label, cent)
 
 def score_grp(color_property, area, pred_property, histogram): #phi
     p = histogram[getbin(discretize_color_property(color_property), pred_property)]
@@ -249,12 +246,13 @@ def score_grp(color_property, area, pred_property, histogram): #phi
 def main():
     processing = False
     count = 1600
-    end = 1796
+    end = 1800
+    pickle_file = 'colorgroup_lite.pickle'
 
     # list of list of colorgroups
     if processing:
         all_color_groups = []
-        with open('colorgroup.pickle', 'ab') as pf:
+        with open(pickle_file, 'ab') as pf:
             with open(os.path.join('test_set2', 'test.csv')) as csvfile:
                 reader = list(csv.DictReader(csvfile))
                 while count != end and count < len(reader):
@@ -292,7 +290,7 @@ def main():
             
     else:
         all_color_groups = []
-        with open('colorgroup.pickle', 'rb') as pf:
+        with open(pickle_file, 'rb') as pf:
             while 1:
                 try:
                     all_color_groups += (pickle.load(pf))
@@ -319,9 +317,9 @@ def main():
     scaled_cgsp = scaler.transform(cg.spatial_property.reshape(1, -1))
 
     lh = lightness_histogram.get_histogram(scaled_cgsp)
-    lightness_score,lp = score_grp(lightness, cg.area, cg.lightness, lh)
+    lightness_score,lp = score_grp(lightness, cg.area, cg.color_property[0], lh)
     sh = saturation_histogram.get_histogram(scaled_cgsp)
-    saturation_score, sp = score_grp(saturation, cg.area, cg.saturation, sh)
+    saturation_score, sp = score_grp(saturation, cg.area, cg.color_property[1], sh)
     print("Lightness:")
     print("Prob:", lp, "out of", lh)
     print("Score:", lightness_score)
