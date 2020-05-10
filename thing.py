@@ -170,6 +170,19 @@ def relative_saturation(c1, c2):
     return saturation(c1) - saturation(c2)
 
 def chromatic_difference(c1, c2):
+    l1, a1, b1 = c1
+    l2, a2, b2 = c2
+    dasqr = (a1 - a2)**2
+    dbsqr = (b1 - b2)**2
+    dlsqr = (l1 - l2)**2
+    return (dasqr + dbsqr) / (dasqr + dbsqr + dlsqr)
+
+def enclosure_strength(segment_1, segment_2):
+    # how much one segment in the adjacency encloses the other and vice versa. 
+    # Enclosure Strength is defined as the number of pixels of the neighboring 
+    # segment appearing within a 2-pixel neighborhood outside the segment’s
+    # boundary, normalized by the area of that neighborhood. Out-of-image pixels 
+    # are counted as part of the neighborhood area
     pass
 
 class Histogram:
@@ -243,7 +256,7 @@ class ColorGroup:
         #TODO: How use a matrix as a feature bruh
 
 # Individual segments within a color group
-class ColorGroupSegment: #shouldnt u just pass in the list of coordinates and then call ur functions inside this init
+class ColorGroupSegment: 
     def __init__(self, segment, segments, color, pattern_width, pattern_height,label):
         self.color = color
         r,g,b = hex2rgb(color)
@@ -251,6 +264,7 @@ class ColorGroupSegment: #shouldnt u just pass in the list of coordinates and th
         light = lightness(rgb2lab(rgb)[0][0])
         sat = saturation(rgb2lab(rgb)[0][0])
         self.color_property = (light, sat)
+        self.area = sum([len(s) for s in segment])
 
         relative_size = relative_size_ind(segment,segments)
         num_neighbors = normalized_discrete_compactness(pattern_width, pattern_height, segment)
@@ -260,16 +274,23 @@ class ColorGroupSegment: #shouldnt u just pass in the list of coordinates and th
 
         self.spacial_property = (relative_size, num_neighbors, elon, label, cent)
 
-def score_grp(histogram, cg): #phi
-    prob_dist = histogram.get_prob_distribution(cg.spatial_property)
-    p = prob_dist(cg.color_property[0])
-    return np.log(p) * cg.area, p
+def score_grp(histogram, spatial_property, color_property, area): #phi
+    prob_dist = histogram.get_prob_distribution(spatial_property)
+    p = prob_dist(color_property)
+    return np.log(p) * area, p
+
+def score_seg(histogram, spatial_property, color_property, area): #phi
+    prob_dist = histogram.get_prob_distribution(spatial_property)
+    p = prob_dist(color_property)
+    return np.log(p) * area, p
+
+# def score_adj(histogram, spatial_property, )
 
 def main():
-    processing = False
-    count = 1500
-    end = 1800
-    pickle_file = 'colorgroup.pickle'
+    processing = True
+    count = 1200
+    end = 1500
+    pickle_file = 'colorgroup2.pickle'
     color_group_tests = np.arange(0,20,1)
 
     # list of list of colorgroups
@@ -334,21 +355,50 @@ def main():
         sacc = saturation_histogram.train(spatial_properties, s_values)
         print("Saturation Histogram done...\n")
 
+        segment_spatial_properties = [np.array(x.spatial_property) for x in cg.color_groups for cg in all_color_groups] 
+        segment_l_values = [x.color_property[0] for x in cg.color_groups for cg in all_color_groups]
+        segment_s_values = [x.color_property[1] for x in cg.color_groups for cg in all_color_groups]
+        
+        segment_lightness_histogram = Histogram()
+        segment_lacc = segment_lightness_histogram.train(segment_spatial_properties, segment_l_values)
+        print("Segment Lightness Histogram done...")
+
+        segment_saturation_histogram = Histogram()
+        segment_sacc = segment_saturation_histogram.train(segment_spatial_properties, segment_s_values)
+        print("Segment Saturation Histogram done...\n")
+
         for i in color_group_tests:
             cg = all_color_groups[i]
-            print('Results for', cg.color)
+            print('Results for color group color:', cg.color)
 
-            lightness_score, lp = score_grp(lightness_histogram, cg)
+            lightness_score, lp = score_grp(lightness_histogram, cg.spatial_property, cg.color_property[0], cg.area)
             print("Lightness:")
             print("Prob:", np.round(lp, decimals=2))
             print("Score:", np.round(lightness_score, decimals=2))
 
             print()
             
-            saturation_score, sp = score_grp(saturation_histogram, cg)
+            saturation_score, sp = score_grp(saturation_histogram, cg.spatial_property, cg.color_property[1], cg.area)
             print('Saturation:')
             print("Prob:", np.round(sp, decimals=2))
             print("Score:", np.round(saturation_score, decimals=2))
+            print()
+            print()
+
+            cs = cg.color_groups[0]
+            print('Results for color segment color:', cg.color)
+
+            segment_lightness_score, seg_lp = score_seg(segment_lightness_histogram, cs.spatial_property, cs.color_property[0], cs.area)
+            print("Lightness:")
+            print("Prob:", np.round(seg_lp, decimals=2))
+            print("Score:", np.round(segment_lightness_score, decimals=2))
+
+            print()
+            
+            segment_saturation_score, seg_sp = score_seg(segment_saturation_histogram, cs.spatial_property, cs.color_property[1], cg.area)
+            print('Saturation:')
+            print("Prob:", np.round(seg_sp, decimals=2))
+            print("Score:", np.round(segment_saturation_score, decimals=2))
             print()
             print()
 

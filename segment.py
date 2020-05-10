@@ -83,6 +83,42 @@ def getsegment(img,i,j,palette,visited):
             visited.add((pi,pj+1))
     return segment
 
+# matrix = pixel to segment_id
+def enclosure_strengths(matrix, num_ids):
+    n = len(matrix)
+    m = len(matrix[0])
+    dist = 2
+    count = [[0 for i in range(num_ids+1)] for j in range(num_ids)] # row segment, col is neighboring segment, value is unnnormalized strength
+    for i in range(-dist, n+dist):
+        for j in range(-dist, m+dist):
+            s = set()
+            outofbounds = set()
+            for dx in range(-dist, dist+1):
+                for dy in range(-dist, dist+1):
+                    nx, ny = i+dx, j+dy
+                    if nx >= 0 and nx < n and ny >= 0 and ny < m:
+                        if i >= 0 and i < n and j >= 0 and j < m:
+                            if matrix[i][j] != matrix[nx][ny]:
+                                s.add(matrix[nx][ny])
+                        else:
+                            outofbounds.add(matrix[nx][ny])
+            for k in s:
+                count[k][matrix[i][j]]+=1
+            for k in outofbounds:
+                count[k][num_ids] += 1
+
+    # normalize
+    for i in range(len(count)):
+        total = sum(count[i])
+        if total == 0:
+            continue
+        for j in range(len(count[0])):
+            count[i][j] /= total
+        
+        count[i].pop(-1)
+    
+    return count
+
 def segment_image(img, palette):
     img_cpy = img.copy()
 
@@ -140,4 +176,12 @@ def test(img_num):
         plt.show()
 
 if __name__ == '__main__':
-    test(636382)
+    # test(636382)
+    print(enclosure_strengths([[1, 1, 1], 
+                               [1, 0, 2], 
+                               [1, 1, 1]], 3))
+    print(enclosure_strengths([[1, 1, 1, 1, 1],
+                               [1, 0, 0, 0, 1],
+                               [1, 0, 2, 0, 1],
+                               [1, 0, 0, 0, 1],
+                               [1, 1, 1, 1, 1]], 3))
