@@ -55,36 +55,73 @@ def get_color(img,i,j,palette):
     
     # return get_nearest_hex(rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2])),palette)
 
-def getsegment(img,i,j,palette,visited):
+def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
     #do bfs to get image segment
     h,w,d = img.shape
     # col = get_nearest_rgb(img[i][j],palette)
     col = get_color(img,i,j,palette)
 
-    segment = []
+    segment = set()
     q = []
     q.append((i,j))
     visited.add((i,j))
     while len(q) > 0:
         pi,pj = q.pop(0)
-        segment.append((pi,pj))
-        
+        segment.add((pi,pj))
+        px2id[(pi,pj)] = seg_id
+
         # if pi > 0 and (pi-1,pj) not in visited and get_nearest_rgb(img[pi-1][pj],palette) == col:
-        if pi > 0 and (pi-1,pj) not in visited and get_color(img,pi-1,pj,palette) == col:
-            q.append((pi-1,pj))
-            visited.add((pi-1,pj))
+        if pi > 0:                
+            if (pi-1,pj) not in visited and get_color(img,pi-1,pj,palette) == col:
+                q.append((pi-1,pj))
+                visited.add((pi-1,pj))
+            elif (pi-1,pj) in px2id and px2id[(pi-1,pj)] != seg_id:
+                adj_id = px2id[(pi-1,pj)]
+                if seg_id not in adjacency:
+                    adjacency[seg_id] = set()
+                if adj_id not in adjacency:
+                    adjacency[adj_id] = set()
+                adjacency[seg_id].add(adj_id)
+                adjacency[adj_id].add(seg_id)
         # if pi+1 < h and (pi+1,pj) not in visited and get_nearest_rgb(img[pi+1][pj],palette) == col:
-        if pi+1 < h and (pi+1,pj) not in visited and get_color(img,pi+1,pj,palette) == col:
-            q.append((pi+1,pj))
-            visited.add((pi+1,pj))
+        if pi+1 < h:
+            if (pi+1,pj) not in visited and get_color(img,pi+1,pj,palette) == col:
+                q.append((pi+1,pj))
+                visited.add((pi+1,pj))
+            elif (pi+1,pj) in px2id and px2id[(pi+1,pj)] != seg_id:
+                adj_id = px2id[(pi+1,pj)]
+                if seg_id not in adjacency:
+                    adjacency[seg_id] = set()
+                if adj_id not in adjacency:
+                    adjacency[adj_id] = set()
+                adjacency[seg_id].add(adj_id)
+                adjacency[adj_id].add(seg_id)
         # if pj > 0 and (pi,pj-1) not in visited and get_nearest_rgb(img[pi][pj-1],palette) == col:
-        if pj > 0 and (pi,pj-1) not in visited and get_color(img,pi,pj-1,palette) == col:
-            q.append((pi,pj-1))
-            visited.add((pi,pj-1))
+        if pj > 0:
+            if (pi,pj-1) not in visited and get_color(img,pi,pj-1,palette) == col:
+                q.append((pi,pj-1))
+                visited.add((pi,pj-1))
+            elif (pi,pj-1) in px2id and px2id[(pi,pj-1)] != seg_id:
+                adj_id = px2id[(pi,pj-1)]
+                if seg_id not in adjacency:
+                    adjacency[seg_id] = set()
+                if adj_id not in adjacency:
+                    adjacency[adj_id] = set()
+                adjacency[seg_id].add(adj_id)
+                adjacency[adj_id].add(seg_id)
         # if pj+1 < w and (pi,pj+1) not in visited and get_nearest_rgb(img[pi][pj+1],palette) == col:
-        if pj+1 < w and (pi,pj+1) not in visited and get_color(img,pi,pj+1,palette) == col:
-            q.append((pi,pj+1))
-            visited.add((pi,pj+1))
+        if pj+1 < w:
+            if (pi,pj+1) not in visited and get_color(img,pi,pj+1,palette) == col:
+                q.append((pi,pj+1))
+                visited.add((pi,pj+1))
+            elif (pi,pj+1) in px2id and px2id[(pi,pj+1)] != seg_id:
+                adj_id = px2id[(pi,pj+1)]
+                if seg_id not in adjacency:
+                    adjacency[seg_id] = set()
+                if adj_id not in adjacency:
+                    adjacency[adj_id] = set()
+                adjacency[seg_id].add(adj_id)
+                adjacency[adj_id].add(seg_id)
     return segment
 
 def segment_image(img, palette):
@@ -93,17 +130,22 @@ def segment_image(img, palette):
     segments = {}
     for col in palette:
         segments[col] = []
-
+    
+    px2id = {}
+    adjacency = {}
+    
     visited = set()
+    seg_id = 0
     for i in range(img.shape[0]):
         for j in range(img.shape[1]):
             if (i,j) in visited:
                 continue
             rgb_hex = get_nearest_rgb(img_cpy[i][j],palette)
-            seg = getsegment(img_cpy,i,j,palette,visited)
+            seg = getsegment(img_cpy,i,j,palette,visited,px2id,adjacency,seg_id)
             segments[rgb_hex].append(seg)
+            seg_id += 1
 
-    return segments
+    return (segments, px2id, adjacency)
     
 def preprocess_image(img_num):
     testimg_file = os.path.join('test_set2', str(img_num)+'.png')
@@ -125,8 +167,10 @@ def preprocess_image(img_num):
 
 def get_color_groups(img_num):
     img, palette = preprocess_image(img_num)
-    segments = segment_image(img, palette)
+    segments, px2id, adjacency = segment_image(img, palette)
     color_groups = {}
+    # print(px2id)
+    # print(len(adjacency))
 
     for color in palette:
         group = np.full(img.shape, 255)
@@ -144,4 +188,4 @@ def test(img_num):
         plt.show()
 
 if __name__ == '__main__':
-    test(636382)
+    test(823474)
