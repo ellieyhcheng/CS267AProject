@@ -4,7 +4,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, MinMaxScaler
 from sklearn.neighbors import KernelDensity
-from segment import segment_image, get_color_groups, hex2rgb
+from segment import segment_image, get_color_groups, hex2rgb, enclosure_strengths
 from cv2 import minAreaRect
 from skimage.color import rgb2lab
 import csv
@@ -23,6 +23,11 @@ import matplotlib.pyplot as plt
 # https://dritchie.github.io/pdf/patterncolor.pdf
 
 # http://graphics.stanford.edu/projects/patternColoring/
+
+def hex2lab(color):
+    r,g,b = hex2rgb(color)
+    rgb = [[[r/255,g/255,b/255]]]
+    return rgb2lab(rgb)[0][0]
 
 def lightness(color):
     # L,a,b = color
@@ -155,35 +160,45 @@ def role_labels(segments):
             labels[color] = 1
     return labels
 
-# Properties of color relationship between two adjacent regions
+# Properties of color relationship between two adjacent segments
 def perceptual_diff(c1, c2):
-    l1, a1, b1 = c1
-    l2, a2, b2 = c2
+    l1 = c1[0]
+    a1 = c1[1]
+    b1 = c1[2]
+
+    l2 = c2[0]
+    a2 = c2[1]
+    b2 = c2[2]
+    
     return np.sqrt(l1**2+a1**2+b1**2) - np.sqrt(l2**2+a2**2+b2**2)
 
 def relative_lightness(c1, c2):
-    l1, _, _ = c1
-    l2, _, _ = c2
+    l1 = c1[0]
+    a1 = c1[1]
+    b1 = c1[2]
+
+    l2 = c2[0]
+    a2 = c2[1]
+    b2 = c2[2]
+
     return l1 - l2
 
 def relative_saturation(c1, c2):
     return saturation(c1) - saturation(c2)
 
 def chromatic_difference(c1, c2):
-    l1, a1, b1 = c1
-    l2, a2, b2 = c2
+    l1 = c1[0]
+    a1 = c1[1]
+    b1 = c1[2]
+
+    l2 = c2[0]
+    a2 = c2[1]
+    b2 = c2[2]
+
     dasqr = (a1 - a2)**2
     dbsqr = (b1 - b2)**2
     dlsqr = (l1 - l2)**2
     return (dasqr + dbsqr) / (dasqr + dbsqr + dlsqr)
-
-def enclosure_strength(segment_1, segment_2):
-    # how much one segment in the adjacency encloses the other and vice versa. 
-    # Enclosure Strength is defined as the number of pixels of the neighboring 
-    # segment appearing within a 2-pixel neighborhood outside the segment’s
-    # boundary, normalized by the area of that neighborhood. Out-of-image pixels 
-    # are counted as part of the neighborhood area
-    pass
 
 class Histogram:
     def __init__(self):
@@ -223,18 +238,36 @@ class Histogram:
             return np.exp(log_dens)[0]
         return get_prob
 
+class Pattern:
+    def __init__(self, img_num, img, palette):
+        height,width,d = img.shape
+
+        segments,px2id,adjacency = segment_image(img, palette)
+        enc_str = enclosure_strengths(px2id, len(adjacency))
+
+        new_palette = []
+        for color in palette:
+            if len(segments[color]) == 0:
+                segments.pop(color, None)
+            else:
+                new_palette.append(color)
+
+        self.img_num = img_num
+        self.palette = new_palette
+        labels = role_labels(segments)
+        self.color_groups = [ColorGroup(segments, color, width, height, labels[color], px2id, enc_str) for color in new_palette]
+
 class ColorGroup:
     # u get a map from color to list of segments where each segment is jsut a list of coordinates of that segment
     # like {'FFFFFF' : [[(0,0),(0,1)...] , [(10,10),(10,11)...], ...],
     #       '123455' : [[]]}
     # so u just pass in each of the colors and then for each color, u make a bunch of ColorGroupSegments
     # its a map from color to a list of lists
-    def __init__(self, id, segments, color, pattern_width, pattern_height, label):
-        self.id = id
-        r,g,b = hex2rgb(color)
-        rgb = [[[r/255,g/255,b/255]]]
-        light = lightness(rgb2lab(rgb)[0][0])
-        sat = saturation(rgb2lab(rgb)[0][0])
+    def __init__(self, segments, color, pattern_width, pattern_height, label, px2id, enc_str):
+        self.img_num = img_num
+        lab = hex2lab(color)
+        light = lightness(lab)
+        sat = saturation(lab)
         self.color_property = (light, sat)
         
         self.color = color # in hex
@@ -246,7 +279,11 @@ class ColorGroup:
         seg_spread = segment_spread(color_segments)
         label = label
         
-        self.color_groups = [ColorGroupSegment(seg, segments,color, pattern_width, pattern_height, label) for seg in color_segments]
+        self.color_segments = []
+        for seg in color_segments:
+            cs_id = px2id[seg[0][0]][seg[0][1]]
+            enc = enc_str[cs_id]
+            self.color_segments.append(ColorGroupSegment(cs_id, seg, segments,color, pattern_width, pattern_height, label, enc))
 
         # Segment size statistics
         min_segment_size, max_segment_size, mean_segment_size, std_segment_size = segment_size_stats(color_segments)
@@ -257,14 +294,15 @@ class ColorGroup:
 
 # Individual segments within a color group
 class ColorGroupSegment: 
-    def __init__(self, segment, segments, color, pattern_width, pattern_height,label):
+    def __init__(self, cs_id, segment, segments, color, pattern_width, pattern_height,label, enclosure_strength):
+
+        self.id = cs_id
         self.color = color
-        r,g,b = hex2rgb(color)
-        rgb = [[[r/255,g/255,b/255]]]
-        light = lightness(rgb2lab(rgb)[0][0])
-        sat = saturation(rgb2lab(rgb)[0][0])
+        light = lightness(hex2lab(color))
+        sat = saturation(hex2lab(color))
         self.color_property = (light, sat)
         self.area = sum([len(s) for s in segment])
+        self.enclosure_strength = enclosure_strength
 
         relative_size = relative_size_ind(segment,segments)
         num_neighbors = normalized_discrete_compactness(pattern_width, pattern_height, segment)
@@ -274,28 +312,31 @@ class ColorGroupSegment:
 
         self.spacial_property = (relative_size, num_neighbors, elon, label, cent)
 
-def score_grp(histogram, spatial_property, color_property, area): #phi
+# phi
+def score_grp(histogram, spatial_property, color_property, area):
     prob_dist = histogram.get_prob_distribution(spatial_property)
     p = prob_dist(color_property)
     return np.log(p) * area, p
 
-def score_seg(histogram, spatial_property, color_property, area): #phi
+def score_seg(histogram, spatial_property, color_property, area):
     prob_dist = histogram.get_prob_distribution(spatial_property)
     p = prob_dist(color_property)
     return np.log(p) * area, p
 
-# def score_adj(histogram, spatial_property, )
+def score_adj(h, sp12, cp12, enc_str):
+    prob_dist = h.get_prob_distribution(sp12)
+    p = prob_dist(cp12)
+    return np.log(p) * enc_str, p
 
 def main():
     processing = True
-    count = 1200
-    end = 1500
-    pickle_file = 'colorgroup2.pickle'
-    color_group_tests = np.arange(0,20,1)
+    count = 0
+    end = 300
+    pickle_file = 'patterns.pickle'
+    test_idx = np.arange(0,1,1)
 
     # list of list of colorgroups
     if processing:
-        all_color_groups = []
         with open(pickle_file, 'ab') as pf:
             with open(os.path.join('test_set2', 'test.csv')) as csvfile:
                 reader = list(csv.DictReader(csvfile))
@@ -313,36 +354,27 @@ def main():
                         img = imgfile.convert('RGBA')
                         img = np.array(img)
 
-                    height,width,d = img.shape
-                    # print("Start segmenting...")
-                    segments = segment_image(img, palette)
-
-                    new_palette = []
-                    for color in palette:
-                        if len(segments[color]) == 0:
-                            segments.pop(color, None)
-                        else:
-                            new_palette.append(color)
-
-                    # print("Finish segmenting...")
-                    labels = role_labels(segments)
-                    color_groups = [ColorGroup(img_num, segments, color, width, height, labels[color]) for color in new_palette]
-                    all_color_groups += color_groups
-                    pickle.dump(color_groups, pf, protocol=4)
+                    patt = Pattern(img_num, img, palette)
+                    
+                    pickle.dump(patt, pf, protocol=4)
 
             print("Finished all color groups...")
             
     else:
-        all_color_groups = []
+        all_patterns = []
         with open(pickle_file, 'rb') as pf:
             while 1:
                 try:
-                    all_color_groups += (pickle.load(pf))
+                    all_patterns += (pickle.load(pf))
                 except EOFError:
                     break
-        print(len(all_color_groups))
+        print(len(all_patterns))
+
+        all_color_groups = [cg for cg in patt.color_groups for cg in all_patterns]
 
         print("Start training...")
+
+        # Unary
         spatial_properties = [np.array(x.spatial_property) for x in all_color_groups]
         l_values = [x.color_property[0] for x in all_color_groups]
         s_values = [x.color_property[1] for x in all_color_groups]
@@ -355,9 +387,9 @@ def main():
         sacc = saturation_histogram.train(spatial_properties, s_values)
         print("Saturation Histogram done...\n")
 
-        segment_spatial_properties = [np.array(x.spatial_property) for x in cg.color_groups for cg in all_color_groups] 
-        segment_l_values = [x.color_property[0] for x in cg.color_groups for cg in all_color_groups]
-        segment_s_values = [x.color_property[1] for x in cg.color_groups for cg in all_color_groups]
+        segment_spatial_properties = [np.array(x.spatial_property) for x in cg.color_segments for cg in all_color_groups] 
+        segment_l_values = [x.color_property[0] for x in cg.color_segments for cg in all_color_groups]
+        segment_s_values = [x.color_property[1] for x in cg.color_segments for cg in all_color_groups]
         
         segment_lightness_histogram = Histogram()
         segment_lacc = segment_lightness_histogram.train(segment_spatial_properties, segment_l_values)
@@ -367,8 +399,47 @@ def main():
         segment_sacc = segment_saturation_histogram.train(segment_spatial_properties, segment_s_values)
         print("Segment Saturation Histogram done...\n")
 
-        for i in color_group_tests:
-            cg = all_color_groups[i]
+        # Pairwise 
+        adj_spatial_properties = []
+        per_diff = []
+        rel_light = []
+        rel_sat = []
+        chrom_diff = []
+        
+        for patt in all_patterns:
+            for cg in patt.color_groups:
+                for seg in cg.color_segments:
+                    adj_ids = [x if seg.enclosure_strength[x] != 0 for x in range(seg.enclosure_strength)]
+
+                    for cg1 in patt.color_groups:
+                        if cg.color != cg1.color:
+                            for seg1 in cg1.color_segments:
+                                if seg1.id in adj_ids:
+                                    adj_spatial_properties.append(np.concatenate((np.array(seg.spatial_property)), np.array(seg1.spatial_property)))
+                                    per_diff.append(perceptual_diff(seg.color, seg1.color))
+                                    rel_light.append(relative_lightness(seg.color, seg1.color))
+                                    rel_sat.append(relative_saturation(seg.color, seg1.color))
+                                    chrom_diff.append(chromatic_difference(seg.color, seg1.color))
+
+        per_diff_histogram = Histogram()
+        per_diff_acc = per_diff_histogram.train(adj_spatial_properties, per_diff)
+        print("Pereceptual Difference Histogram done...")
+        
+        rel_light_histogram = Histogram()
+        rel_light_acc = rel_light_histogram.train(adj_spatial_properties, rel_light)
+        print("Relative Lightness Histogram done...")
+
+        rel_sat_histogram = Histogram()
+        rel_sat_acc = rel_sat_histogram.train(adj_spatial_properties, rel_sat)
+        print("Relative Saturation Histogram done...")
+
+        chrom_diff_histogram = Histogram()
+        chrom_diff_acc = chrom_diff_histogram.train(adj_spatial_properties, chrom_diff)
+        print("Chromatic Difference Histogram done...\n")
+
+        for i in test_idx:
+            patt = all_patterns[i]
+            cg = patt.color_groups[0]
             print('Results for color group color:', cg.color)
 
             lightness_score, lp = score_grp(lightness_histogram, cg.spatial_property, cg.color_property[0], cg.area)
@@ -385,7 +456,7 @@ def main():
             print()
             print()
 
-            cs = cg.color_groups[0]
+            cs = cg.color_segments[0]
             print('Results for color segment color:', cg.color)
 
             segment_lightness_score, seg_lp = score_seg(segment_lightness_histogram, cs.spatial_property, cs.color_property[0], cs.area)
@@ -401,6 +472,38 @@ def main():
             print("Score:", np.round(segment_saturation_score, decimals=2))
             print()
             print()
+
+            adj_ids = [x if cs.enclosure_strength[x] != 0 for x in range(cs.enclosure_strength)]
+            
+            for cg1 in cg:
+                for seg1 in cg1.color_segments:
+                    if seg1.id == adj_ids[0]:
+                        sp12 = np.concatenate((np.array(cs.spatial_property), np.array(seg1.spatial_property)))
+                        enc = cs.enclosure_strength[seg1.id]
+
+                        per_diff_score, per_diff_p = score_adj(per_diff_histogram, sp12, perceptual_diff(cs.color, seg1.color), enc)
+                        print('Perceptual Difference:')
+                        print('Prob:', np.round(per_diff_p, decimals=2))
+                        print('Score:', np.round(per_diff_score, decimals=2))
+                        print()
+                        
+                        rel_light_score, rel_light_p = score_adj(rel_light_histogram, sp12, perceptual_diff(cs.color, seg1.color), enc)
+                        print('Perceptual Difference:')
+                        print('Prob:', np.round(rel_light_p, decimals=2))
+                        print('Score:', np.round(rel_light_score, decimals=2))
+                        print()
+                        
+                        rel_sat_score, rel_sat_p = score_adj(rel_sat_histogram, sp12, perceptual_diff(cs.color, seg1.color), enc)
+                        print('Perceptual Difference:')
+                        print('Prob:', np.round(rel_sat_p, decimals=2))
+                        print('Score:', np.round(rel_sat_score, decimals=2))
+                        print()
+
+                        chrom_diff_score, chrom_diff_p = score_adj(chrom_diff_histogram, sp12, perceptual_diff(cs.color, seg1.color), enc)
+                        print('Perceptual Difference:')
+                        print('Prob:', np.round(chrom_diff_p, decimals=2))
+                        print('Score:', np.round(chrom_diff_score, decimals=2))
+                        print()
 
 if __name__ == '__main__':
     main()
