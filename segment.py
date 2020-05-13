@@ -68,15 +68,15 @@ def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
     while len(q) > 0:
         pi,pj = q.pop(0)
         segment.add((pi,pj))
-        px2id[(pi,pj)] = seg_id
+        px2id[pi][pj] = seg_id
 
         # if pi > 0 and (pi-1,pj) not in visited and get_nearest_rgb(img[pi-1][pj],palette) == col:
         if pi > 0:                
             if (pi-1,pj) not in visited and get_color(img,pi-1,pj,palette) == col:
                 q.append((pi-1,pj))
                 visited.add((pi-1,pj))
-            elif (pi-1,pj) in px2id and px2id[(pi-1,pj)] != seg_id:
-                adj_id = px2id[(pi-1,pj)]
+            elif px2id[pi-1][pj] != -1 and px2id[pi-1][pj] != seg_id:
+                adj_id = px2id[pi-1][pj]
                 if seg_id not in adjacency:
                     adjacency[seg_id] = set()
                 if adj_id not in adjacency:
@@ -88,8 +88,8 @@ def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
             if (pi+1,pj) not in visited and get_color(img,pi+1,pj,palette) == col:
                 q.append((pi+1,pj))
                 visited.add((pi+1,pj))
-            elif (pi+1,pj) in px2id and px2id[(pi+1,pj)] != seg_id:
-                adj_id = px2id[(pi+1,pj)]
+            elif px2id[pi+1][pj] != -1 and px2id[pi+1][pj] != seg_id:
+                adj_id = px2id[pi+1][pj]
                 if seg_id not in adjacency:
                     adjacency[seg_id] = set()
                 if adj_id not in adjacency:
@@ -101,8 +101,8 @@ def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
             if (pi,pj-1) not in visited and get_color(img,pi,pj-1,palette) == col:
                 q.append((pi,pj-1))
                 visited.add((pi,pj-1))
-            elif (pi,pj-1) in px2id and px2id[(pi,pj-1)] != seg_id:
-                adj_id = px2id[(pi,pj-1)]
+            elif px2id[pi][pj-1] != -1 and px2id[pi][pj-1] != seg_id:
+                adj_id = px2id[pi][pj-1]
                 if seg_id not in adjacency:
                     adjacency[seg_id] = set()
                 if adj_id not in adjacency:
@@ -114,8 +114,8 @@ def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
             if (pi,pj+1) not in visited and get_color(img,pi,pj+1,palette) == col:
                 q.append((pi,pj+1))
                 visited.add((pi,pj+1))
-            elif (pi,pj+1) in px2id and px2id[(pi,pj+1)] != seg_id:
-                adj_id = px2id[(pi,pj+1)]
+            elif px2id[pi][pj+1] != -1 and px2id[pi][pj+1] != seg_id:
+                adj_id = px2id[pi][pj+1]
                 if seg_id not in adjacency:
                     adjacency[seg_id] = set()
                 if adj_id not in adjacency:
@@ -124,14 +124,51 @@ def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
                 adjacency[adj_id].add(seg_id)
     return segment
 
+# matrix = pixel to segment_id
+def enclosure_strengths(matrix, num_ids):
+    n = len(matrix)
+    m = len(matrix[0])
+    dist = 2
+    count = [[0 for i in range(num_ids+1)] for j in range(num_ids)] # row segment, col is neighboring segment, value is unnnormalized strength
+    for i in range(-dist, n+dist):
+        for j in range(-dist, m+dist):
+            s = set()
+            outofbounds = set()
+            for dx in range(-dist, dist+1):
+                for dy in range(-dist, dist+1):
+                    nx, ny = i+dx, j+dy
+                    if nx >= 0 and nx < n and ny >= 0 and ny < m:
+                        if i >= 0 and i < n and j >= 0 and j < m:
+                            if matrix[i][j] != matrix[nx][ny]:
+                                s.add(matrix[nx][ny])
+                        else:
+                            outofbounds.add(matrix[nx][ny])
+            for k in s:
+                count[k][matrix[i][j]]+=1
+            for k in outofbounds:
+                count[k][num_ids] += 1
+
+    # normalize
+    for i in range(len(count)):
+        total = sum(count[i])
+        if total == 0:
+            continue
+        for j in range(len(count[0])):
+            count[i][j] /= total
+        
+        count[i].pop(-1)
+    
+    return count
+
 def segment_image(img, palette):
     img_cpy = img.copy()
+    h,w,d = img.shape
 
     segments = {}
     for col in palette:
         segments[col] = []
     
-    px2id = {}
+    px2id = [[-1 for j in range(w)] for i in range(h)]
     adjacency = {}
     
     visited = set()
@@ -171,6 +208,9 @@ def get_color_groups(img_num):
     color_groups = {}
     # print(px2id)
     # print(len(adjacency))
+    enc_str = enclosure_strengths(px2id, len(adjacency))
+    print(enc_str)
+    #print(adjacency)
 
     for color in palette:
         group = np.full(img.shape, 255)
