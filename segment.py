@@ -157,6 +157,11 @@ def enclosure_strengths(matrix, num_ids):
             count[i][j] /= total
         
         count[i].pop(-1)
+
+    total_total = sum([sum(x) for x in count])
+    for i in range(len(count)):
+        for j in range(len(count[0])):
+            count[i][j] /= total_total
     
     return count
 
@@ -209,8 +214,14 @@ def get_color_groups(img_num):
     # print(px2id)
     # print(len(adjacency))
     enc_str = enclosure_strengths(px2id, len(adjacency))
+    for id1 in adjacency:
+        for id2 in adjacency[id1]:
+            #id1 is adjacent to id2
+            assert(enc_str[id1][id2] > 0)
+    # adjacency maps from segment id to a set of all segment ids that are adjacent to it
+    total = sum([sum(x) for x in enc_str])
+    assert(total == 1)
     print(enc_str)
-    #print(adjacency)
 
     for color in palette:
         group = np.full(img.shape, 255)
