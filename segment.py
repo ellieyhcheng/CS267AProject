@@ -50,8 +50,8 @@ def get_color(img,i,j,palette):
             distances.append(d)
     # if len(distances) == 0:
     #     return get_nearest_hex(c1hex,palette)
-    n_rgb = colors[distances.index(min(distances))]
-    return rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2]))
+    return get_nearest_rgb(colors[distances.index(min(distances))],palette)
+    #return rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2]))
     
     # return get_nearest_hex(rgb2hex((n_rgb[0],n_rgb[1],n_rgb[2])),palette)
 
@@ -211,17 +211,33 @@ def get_color_groups(img_num):
     img, palette = preprocess_image(img_num)
     segments, px2id, adjacency = segment_image(img, palette)
     color_groups = {}
+    # print(adjacency)
+    print(palette)
+    img2 = img.copy()
+
+    print(get_color(img2,1,23,palette))
+    print(get_color(img2,1,24,palette))
+    print(get_color(img2,3,28,palette))
+    for i in range(img2.shape[0]):
+        for j in range(img2.shape[1]):
+            if px2id[i][j] != 36:# and px2id[i][j] != 36:
+                img2[i][j] = [0,0,0,255]
+            else:
+                print(i,j)
+    plt.imshow(img2)
+    plt.show()
+            
     # print(px2id)
     # print(len(adjacency))
-    enc_str = enclosure_strengths(px2id, len(adjacency))
-    for id1 in adjacency:
-        for id2 in adjacency[id1]:
-            #id1 is adjacent to id2
-            assert(enc_str[id1][id2] > 0)
-    # adjacency maps from segment id to a set of all segment ids that are adjacent to it
-    total = sum([sum(x) for x in enc_str])
-    assert(total == 1)
-    print(enc_str)
+    # enc_str = enclosure_strengths(px2id, len(adjacency))
+    # for id1 in adjacency:
+    #     for id2 in adjacency[id1]:
+    #         #id1 is adjacent to id2
+    #         assert(enc_str[id1][id2] > 0)
+    # # adjacency maps from segment id to a set of all segment ids that are adjacent to it
+    # total = sum([sum(x) for x in enc_str])
+    # assert(total == 1)
+    # print(enc_str)
 
     for color in palette:
         group = np.full(img.shape, 255)
@@ -234,9 +250,9 @@ def get_color_groups(img_num):
 
 def test(img_num):        
     color_groups = get_color_groups(img_num)
-    for color_group in color_groups.values():
-        plt.imshow(color_group)
-        plt.show()
+    # for color_group in color_groups.values():
+    #     plt.imshow(color_group)
+    #     plt.show()
 
 if __name__ == '__main__':
-    test(823474)
+    test(757206)
