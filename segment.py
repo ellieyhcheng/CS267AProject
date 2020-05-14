@@ -218,20 +218,20 @@ def get_color_groups(img_num):
     segments, px2id, adjacency = segment_image(img, palette)
     color_groups = {}
     # print(adjacency)
-    print(palette)
-    img2 = img.copy()
+    # print(palette)
+    # img2 = img.copy()
 
-    print(get_color(img2,1,23,palette))
-    print(get_color(img2,1,24,palette))
-    print(get_color(img2,3,28,palette))
-    for i in range(img2.shape[0]):
-        for j in range(img2.shape[1]):
-            if px2id[i][j] != 36:# and px2id[i][j] != 36:
-                img2[i][j] = [0,0,0,255]
-            else:
-                print(i,j)
-    plt.imshow(img2)
-    plt.show()
+    # print(get_color(img2,1,23,palette))
+    # print(get_color(img2,1,24,palette))
+    # print(get_color(img2,3,28,palette))
+    # for i in range(img2.shape[0]):
+    #     for j in range(img2.shape[1]):
+    #         if px2id[i][j] != 36:# and px2id[i][j] != 36:
+    #             img2[i][j] = [0,0,0,255]
+    #         else:
+    #             print(i,j)
+    # plt.imshow(img2)
+    # plt.show()
             
     # print(px2id)
     # print(len(adjacency))
@@ -249,9 +249,8 @@ def get_color_groups(img_num):
     for i in range(len(enc)):
         if enc[i] != 0:
             enc_map[i] = enc[i]
-    # print(enc_map)
-    # print(adjacency[3])
-    # print(segments['2E3900'])
+    print(enc_map)
+    print(adjacency[3])
 
     for color in palette:
         group = np.full(img.shape, 255)

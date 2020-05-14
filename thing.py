@@ -325,13 +325,13 @@ def score_seg(histogram, spatial_property, color_property, area):
 def score_adj(h, sp12, cp12, enc_str):
     prob_dist = h.get_prob_distribution(sp12)
     p = prob_dist(cp12)
-    return np.log(p) * enc_str * 100, p # TODO: Remove 100 weighting
+    return np.log(p) * enc_str, p
 
 def main():
     processing = False
     training = False
-    count = 0
-    end = 500
+    count = 500
+    end = 1700
     pickle_file = 'patterns.pickle'
     histogram_file = 'histogram.pickle'
     unary = True
@@ -544,7 +544,6 @@ def main():
 
                         if pairwise:
                             adj_ids = list(cs.enclosure_strength.keys())
-                            print(cs.id, ':', adj_ids)
 
                             i = 0
                             n_adj = 2
