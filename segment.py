@@ -122,10 +122,10 @@ def getsegment(img,i,j,palette,visited,px2id,adjacency,seg_id):
                     adjacency[adj_id] = set()
                 adjacency[seg_id].add(adj_id)
                 adjacency[adj_id].add(seg_id)
-    return segment
+    return list(segment)
 
 # matrix = pixel to segment_id
-def enclosure_strengths(matrix, num_ids):
+def enclosure_strengths(matrix, num_ids, adjacency):
     n = len(matrix)
     m = len(matrix[0])
     dist = 2
@@ -147,6 +147,12 @@ def enclosure_strengths(matrix, num_ids):
                 count[k][matrix[i][j]]+=1
             for k in outofbounds:
                 count[k][num_ids] += 1
+
+    for i in range(len(count)):
+        for j in range(len(count[0])):
+            if count[i][j] != 0:
+                if not(j in adjacency[i]):
+                    count[i][j] = 0
 
     # normalize
     for i in range(len(count)):
@@ -213,15 +219,23 @@ def get_color_groups(img_num):
     color_groups = {}
     # print(px2id)
     # print(len(adjacency))
-    enc_str = enclosure_strengths(px2id, len(adjacency))
+    enc_str = enclosure_strengths(px2id, len(adjacency), adjacency)
     for id1 in adjacency:
         for id2 in adjacency[id1]:
             #id1 is adjacent to id2
             assert(enc_str[id1][id2] > 0)
     # adjacency maps from segment id to a set of all segment ids that are adjacent to it
     total = sum([sum(x) for x in enc_str])
-    assert(total == 1)
-    print(enc_str)
+    assert(np.round(total, 2) == 1)
+
+    enc = enc_str[3]
+    enc_map = {}
+    for i in range(len(enc)):
+        if enc[i] != 0:
+            enc_map[i] = enc[i]
+    print(enc_map)
+    print(adjacency[3])
+    print(segments['2E3900'])
 
     for color in palette:
         group = np.full(img.shape, 255)
@@ -234,9 +248,11 @@ def get_color_groups(img_num):
 
 def test(img_num):        
     color_groups = get_color_groups(img_num)
-    for color_group in color_groups.values():
-        plt.imshow(color_group)
-        plt.show()
+    # for color_group in color_groups.values():
+    #     plt.imshow(color_group)
+    #     plt.show()
 
 if __name__ == '__main__':
-    test(823474)
+    # test(584317)
+    test(757206)
+    # test(465753)
