@@ -1,13 +1,13 @@
 # import pymc3 as pm
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, Lasso
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, MinMaxScaler
 from sklearn.neighbors import KernelDensity
 from sklearn.metrics.pairwise import euclidean_distances
 from segment import segment_image, get_color_groups, hex2rgb, enclosure_strengths
 from cv2 import minAreaRect
-from skimage.color import rgb2lab
+from skimage.color import rgb2lab, rgb2hsv
 import csv
 from PIL import Image
 import os
@@ -15,6 +15,7 @@ import pickle
 import matplotlib.pyplot as plt
 import time
 import datetime
+from math import cos, sin
 
 # https://docs.pymc.io/
 
@@ -203,6 +204,142 @@ def chromatic_difference(c1, c2):
     dlsqr = (l1 - l2)**2
     return (dasqr + dbsqr) / (dasqr + dbsqr + dlsqr)
 
+# colors given in hex
+def compat_features(c1, c2, c3, c4, c5):
+    colors = [c1, c2, c3, c4, c5]
+
+    rgb = np.array([])
+    lab = np.array([])
+    hsv = np.array([])
+    chsv = np.array([])
+
+    for c in colors:
+        r,g,b = hex2rgb(c)
+        rgb1 = np.array([r/255, g/255, b/255])
+        lab1 = hex2lab(c)
+        hsv1 = rgb2hsv([rgb1])[0]
+        chsv1 = [hsv1[1] * cos(hsv1[0]), hsv1[0] * sin(hsv1[0]), hsv1[2]]
+
+        rgb = np.append(arg, rgb1)
+        lab = np.append(arg, lab1)
+        hsv = np.append(arg, hsv1)
+        chsv = np.append(arg, chsv1)
+
+    sort_idx = np.argsort(lab[:,0])
+    rgb_sorted = np.flatten(rgb[sort_idx])
+    lab_sorted = np.flatten(lab[sort_idx])
+    hsv_sorted = np.flatten(hsv[sort_idx])
+    chsv_sorted = np.flatten(chsv[sort_idx])
+
+    rgb_diff = np.zeros((3, 4))
+    lab_diff = np.zeros((3, 4))
+    hsv_diff = np.zeros((3, 4))
+    chsv_diff = np.zeros((3, 4))
+
+    for i in range(1,5):
+        rgb_diff[0, i-1] = rgb[i, 0] - rgb[i - 1, 0]
+        rgb_diff[1, i-1] = rgb[i, 1] - rgb[i - 1, 1]
+        rgb_diff[2, i-1] = rgb[i, 2] - rgb[i - 1, 2]
+
+        lab_diff[0, i-1] = lab[i, 0] - lab[i - 1, 0]
+        lab_diff[1, i-1] = lab[i, 1] - lab[i - 1, 1]
+        lab_diff[2, i-1] = lab[i, 2] - lab[i - 1, 2]
+
+        minSatVal = min(np.concatenate((hsv[i-1:i, 1], hsv[i-1:i, 2])))
+        if minSatVal >= 0.2:
+            pts = sort([hsv[i, 1], hsv[i-1, 1]])
+            hsv_diff[0, i-1] = min(pts[1] - pts[0], 1-(pts[1] - pts[0]))
+        hsv_diff[1, i-1] = hsv[i, 1] - hsv[i - 1, 1]
+        hsv_diff[2, i-1] = hsv[i, 2] - hsv[i - 1, 2]
+
+        chsv_diff[0, i-1] = chsv[i, 0] - chsv[i - 1, 0]
+        chsv_diff[1, i-1] = chsv[i, 1] - chsv[i - 1, 1]
+        chsv_diff[2, i-1] = chsv[i, 2] - chsv[i - 1, 2]
+    
+    sort_rgb_diff = np.concatenate((np.sort(rgb_diff[0]), np.sort(rgb_diff[1]), np.sort(rgb_diff[2])))
+    sort_lab_diff = np.concatenate((np.sort(lab_diff[0]), np.sort(lab_diff[1]), np.sort(lab_diff[2])))
+    sort_hsv_diff = np.concatenate((np.sort(hsv_diff[0]), np.sort(hsv_diff[1]), np.sort(hsv_diff[2])))
+    sort_chsv_diff = np.concatenate((np.sort(chsv_diff[0]), np.sort(chsv_diff[1]), np.sort(chsv_diff[2])))
+
+    rgb_mean = np.mean(rgb, axis=0)
+    lab_mean = np.mean(lab, axis=0)
+    hsv_mean = np.mean(hsv, axis=0)
+    chsv_mean = np.mean(chsv, axis=0)
+
+    rgb_std = np.std(rgb, axis=0)
+    lab_std = np.std(lab, axis=0)
+    hsv_std = np.std(hsv, axis=0)
+    chsv_std = np.std(chsv, axis=0)
+
+    rgb_median = np.median(rgb, axis=0)
+    lab_median = np.median(lab, axis=0)
+    hsv_median = np.median(hsv, axis=0)
+    chsv_median = np.median(chsv, axis=0)
+
+    rgb_max = np.amax(rgb, axis=0)
+    lab_max = np.amax(lab, axis=0)
+    hsv_max = np.amax(hsv, axis=0)
+    chsv_max = np.amax(chsv, axis=0)
+
+    rgb_min = np.amin(rgb, axis=0)
+    lab_min = np.amin(lab, axis=0)
+    hsv_min = np.amin(hsv, axis=0)
+    chsv_min = np.amin(chsv, axis=0)
+
+    rgb_range = rgb_max - rgb_min
+    lab_range = lab_max - lab_min
+    hsv_range = hsv_max - hsv_min
+    chsv_range = chsv_max - chsv_min
+
+    return np.concatenate((
+        np.flatten(chsv),
+        np.flatten(chsv_sorted),
+        np.flatten(chsv_diff),
+        np.flatten(sort_chsv_diff),
+        np.flatten(chsv_mean),
+        np.flatten(chsv_std),
+        np.flatten(chsv_median),
+        np.flatten(chsv_max),
+        np.flatten(chsv_min),
+        np.flatten(chsv_range),
+        np.flatten(lab),
+        np.flatten(lab_sorted),
+        np.flatten(lab_diff),
+        np.flatten(sort_lab_diff),
+        np.flatten(lab_mean),
+        np.flatten(lab_std),
+        np.flatten(lab_median),
+        np.flatten(lab_max),
+        np.flatten(lab_min),
+        np.flatten(lab_range),
+        np.flatten(hsv),
+        np.flatten(hsv_sorted),
+        np.flatten(hsv_diff),
+        np.flatten(sort_hsv_diff),
+        np.flatten(hsv_mean),
+        np.flatten(hsv_std),
+        np.flatten(hsv_median),
+        np.flatten(hsv_max),
+        np.flatten(hsv_min),
+        np.flatten(hsv_range),
+        np.flatten(rgb),
+        np.flatten(rgb_sorted),
+        np.flatten(rgb_diff),
+        np.flatten(sort_rgb_diff),
+        np.flatten(rgb_mean),
+        np.flatten(rgb_std),
+        np.flatten(rgb_median),
+        np.flatten(rgb_max),
+        np.flatten(rgb_min),
+        np.flatten(rgb_range)
+    ))
+
+
+# lasso regression
+def lasso_regression(x, y, weights, a=1.0):
+    clf = linear_model.Lasso(alpha=a)
+    return clf.score(x, y, sample_weight=weights)
+
 class Histogram:
     def __init__(self):
         pass
@@ -257,6 +394,7 @@ class Pattern:
         labels = role_labels(segments)
 
         self.color_groups = [ColorGroup(segments, color, width, height, labels[color], px2id, enc_str) for color in palette]
+        self.color_groups = sorted(self.color_groups)
 
 class ColorGroup:
     # u get a map from color to list of segments where each segment is jsut a list of coordinates of that segment
@@ -326,6 +464,90 @@ def score_adj(h, sp12, cp12, enc_str):
     prob_dist = h.get_prob_distribution(sp12)
     p = prob_dist(cp12)
     return np.log(p) * enc_str, p
+
+def score_cmp():
+    pass 
+
+# should return a probability distribution
+def factor_graph(pattern, weights):
+    with open(histogram_file, 'rb') as hf:
+        lightness_histogram = pickle.load(hf)
+        saturation_histogram = pickle.load(hf)
+        segment_lightness_histogram = pickle.load(hf)
+        segment_saturation_histogram = pickle.load(hf)
+        per_diff_histogram = pickle.load(hf)
+        rel_light_histogram = pickle.load(hf)
+        rel_sat_histogram = pickle.load(hf)
+        chrom_diff_histogram = pickle.load(hf)
+
+    # only 9 weights?
+    cg_lightness_w = weights[0]
+    cs_lightness_w = weights[1]
+    cg_saturation_w = weights[2]
+    cs_saturation_w = weights[3]
+    adj_per_diff_w = weights[4]
+    adj_rel_light_w = weights[5]
+    adj_rel_sat_w = weights[6]
+    adj_chrom_diff_w = weights[7]
+    cmp_w = weights[8]
+
+    factor_product = 1
+
+    for cg in pattern.color_groups:
+        lightness_score, _ = score_grp(lightness_histogram, cg.spatial_property, lightness(hex2lab(cg.color)), cg.area)
+        saturation_score, _ = score_grp(saturation_histogram, cg.spatial_property, saturation(hex2lab(cg.color)), cg.area)
+        sum_segment_lightness_score, sum_segment_saturation_score, sum_per_diff_score, sum_rel_light_score, sum_rel_sat_score, sum_chrom_diff_score = 0, 0, 0, 0, 0, 0
+        for cs in cg.color_segments:
+            segment_lightness_score, _ = score_grp(lightness_histogram, cs.spatial_property, lightness(hex2lab(cs.color)), cs.area)
+            segment_saturation_score, _ = score_grp(saturation_histogram, cs.spatial_property, saturation(hex2lab(cs.color)), cs.area)
+            sum_segment_lightness_score += segment_lightness_score
+            sum_segment_saturation_score += segment_saturation_score
+
+            adj_ids, n_adj, i = list(cs.enclosure_strength.keys()), 0, 2
+
+            for cg1 in pattern.color_groups:
+                if i >= n_adj:
+                    break
+                for seg1 in cg1.color_segments:
+                    if i >= n_adj:
+                        break
+                    if seg1.id in adj_ids:
+                        i += 1
+                        sp12 = np.concatenate((cs.spatial_property, seg1.spatial_property))
+                        cp12 = perceptual_diff(hex2lab(cs.color), hex2lab(seg1.color))
+                        enc = cs.enclosure_strength[seg1.id]
+
+                        per_diff_score, _ = score_adj(per_diff_histogram, sp12, cp12, enc)
+                        sum_per_diff_score += per_diff_score
+                        rel_light_score, _ = score_adj(rel_light_histogram, sp12, relative_lightness(hex2lab(cs.color), hex2lab(seg1.color)), enc)
+                        sum_rel_light_score += rel_light_score
+                        rel_sat_score, _ = score_adj(rel_sat_histogram, sp12, relative_saturation(hex2lab(cs.color), hex2lab(seg1.color)), enc)
+                        sum_rel_sat_score += rel_sat_score
+                        chrom_diff_score, _ = score_adj(chrom_diff_histogram, sp12, chromatic_difference(hex2lab(cs.color), hex2lab(seg1.color)), enc)
+                        sum_chrom_diff_score += chrom_diff_score
+
+        lightness_unary_factor = e**((cg_lightness_w*lightness_score) + (cs_lightness_w*sum_segment_lightness_score))
+        saturation_unary_factor = e**((cg_saturation_w*saturation_score) + (cs_saturation_w*sum_segment_saturation_score))
+        per_diff_pairwise_factor = e**(adj_per_diff_w*sum_per_diff_score)
+        rel_light_pairwise_factor = e**(adj_rel_light_w*sum_rel_light_score)
+        rel_sat_pairwise_factor = e**(adj_rel_sat_w*sum_rel_sat_score)
+        chrom_diff_pairwise_factor = e**(adj_chrom_diff_w*sum_chrom_diff_score)
+
+        factor_product *= lightness_unary_factor*saturation_unary_factor*per_diff_pairwise_factor*rel_light_pairwise_factor*rel_sat_pairwise_factor*chrom_diff_pairwise_factor
+    
+def sample():
+    # metropolis hasitngs:
+    # propose new state, accept with probability proportional to model score
+    # different temperatures
+    # - perturb randomly chosen color ~ N(0,sigma) in RGB
+    # - swap colors
+    print("xD")
+    # initialize pattern
+    # Pattern(self, img_num, width, height, segments, px2id, enc_str, palette)
+    #p = Pattern()
+    
+def perturb(temp):
+    pass
 
 def main():
     processing = False
@@ -496,16 +718,30 @@ def main():
                 rel_sat_histogram = pickle.load(hf)
                 chrom_diff_histogram = pickle.load(hf)
 
+        # train compat model
+
+        # all_compat_features = np.array([])
+
+        # for patt in all_patterns:
+        #     colors = patt.palette
+        #     while len(colors) < 5:
+        #         colors.append(patt.palette[-1])
+        #     all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
+
+        # ratings = 
+        # compat_model = linear_model.Lasso().fit(all_compat_features, ratings)
+        
+
         for i in test_idx:
             patt = all_patterns[i]
             # cg = patt.color_groups[0]
 
             print('--- Pattern Info ---')
             print('Image ID:', patt.img_num)
-            for cg1 in patt.color_groups:
-                print('Color group color:', cg1.color)
-                print('    Segments:', [seg.id for seg in cg1.color_segments])
-                print()
+            # for cg1 in patt.color_groups:
+            #     print('Color group color:', cg1.color)
+            #     print('    Segments:', [seg.id for seg in cg1.color_segments])
+            #     print()
 
             for cg in patt.color_groups[:1]:
                 print('--- Color Group Results ---')
@@ -601,6 +837,10 @@ def main():
                                         print('    Score:', np.round(chrom_diff_score, decimals=4))
                                         print()
                                         
+            
+            colors = patt.palette
+            while len(colors) < 5:
+                colors.append(patt.palette[-1])
+            compat_f = compat_features(colors[0], colors[1], colors[2], colors[3], colors[4])
 
-if __name__ == '__main__':
-    main()
+            # lasso_regression(compat_f, )
