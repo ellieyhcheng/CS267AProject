@@ -188,7 +188,8 @@ def segment_image(img, palette):
         for j in range(img.shape[1]):
             if (i,j) in visited:
                 continue
-            rgb_hex = get_nearest_rgb(img_cpy[i][j],palette)
+            rgb_hex = get_color(img_cpy,i,j,palette)
+            #rgb_hex = get_nearest_rgb(img_cpy[i][j],palette)
             seg = getsegment(img_cpy,i,j,palette,visited,px2id,adjacency,seg_id)
             segments[rgb_hex].append(seg)
             seg_id += 1
@@ -221,12 +222,19 @@ def get_color_groups(img_num):
     print(palette)
     img2 = img.copy()
 
-    print(get_color(img2,1,23,palette))
-    print(get_color(img2,1,24,palette))
-    print(get_color(img2,3,28,palette))
+    for color in segments:
+        for seg in segments[color]:
+            if (15,43) in seg:
+                print("HELLO!", color)
+                print(seg)
+                break
+
+    print(get_color(img2,15,43,palette))
+    print(get_color(img2,150,170,palette))
+    # print(get_color(img2,3,28,palette))
     for i in range(img2.shape[0]):
         for j in range(img2.shape[1]):
-            if px2id[i][j] != 36:# and px2id[i][j] != 36:
+            if px2id[i][j] != 22:# and px2id[i][j] != 36:
                 img2[i][j] = [0,0,0,255]
             else:
                 print(i,j)
@@ -270,5 +278,5 @@ def test(img_num):
 
 if __name__ == '__main__':
     # test(584317)
-    test(757206)
+    test(707090)
     # test(465753)
