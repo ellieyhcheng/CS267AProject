@@ -5,7 +5,7 @@ from thing import Pattern, ColorGroup, ColorGroupSegment
 import pickle
 
 f = open("test_set2/test.csv", 'r')
-h = open("hearts.csv", 'a')
+h = open("ratings.pickle", 'ab')
 ratings = []
 all_patterns = []
 with open('patterns.pickle', 'rb') as pf:
@@ -15,8 +15,13 @@ with open('patterns.pickle', 'rb') as pf:
         except EOFError:
             break
 
+count = 0
 for patt in all_patterns:
     res = requests.get("http://www.colourlovers.com/api/pattern/" + str(patt.img_num), params={"format": "json"})
+    
+    while (res.status_code != 200):
+        print(patt.img_num, ':', 'RETRY')
+        res = requests.get("http://www.colourlovers.com/api/pattern/" + str(patt.img_num), params={"format": "json"})
 
     pattern = res.json()[0]
 
@@ -24,7 +29,8 @@ for patt in all_patterns:
     views = pattern['numViews']
     
     r = (hearts - (0.0152 * views - 0.263)) / (0.0128 * views + 0.218) + 3
-    print(r)
+    print(count, ':', r)
+    count += 1
     ratings.append(r)
 
 pickle.dump(ratings, h, protocol=4)

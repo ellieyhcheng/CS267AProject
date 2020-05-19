@@ -208,28 +208,28 @@ def chromatic_difference(c1, c2):
 def compat_features(c1, c2, c3, c4, c5):
     colors = [c1, c2, c3, c4, c5]
 
-    rgb = np.array([])
-    lab = np.array([])
-    hsv = np.array([])
-    chsv = np.array([])
+    rgb = np.empty((5, 3))
+    lab = np.empty((5, 3))
+    hsv = np.empty((5, 3))
+    chsv = np.empty((5, 3))
 
-    for c in colors:
+    for idx,c in enumerate(colors):
         r,g,b = hex2rgb(c)
         rgb1 = np.array([r/255, g/255, b/255])
         lab1 = hex2lab(c)
-        hsv1 = rgb2hsv([rgb1])[0]
+        hsv1 = rgb2hsv([[rgb1]])[0][0]
         chsv1 = [hsv1[1] * cos(hsv1[0]), hsv1[0] * sin(hsv1[0]), hsv1[2]]
 
-        rgb = np.append(arg, rgb1)
-        lab = np.append(arg, lab1)
-        hsv = np.append(arg, hsv1)
-        chsv = np.append(arg, chsv1)
+        rgb[idx] = rgb1
+        lab[idx] = lab1
+        hsv[idx] = hsv1
+        chsv[idx] = chsv1
 
     sort_idx = np.argsort(lab[:,0])
-    rgb_sorted = np.flatten(rgb[sort_idx])
-    lab_sorted = np.flatten(lab[sort_idx])
-    hsv_sorted = np.flatten(hsv[sort_idx])
-    chsv_sorted = np.flatten(chsv[sort_idx])
+    rgb_sorted = rgb[sort_idx].flatten()
+    lab_sorted = lab[sort_idx].flatten()
+    hsv_sorted = hsv[sort_idx].flatten()
+    chsv_sorted = chsv[sort_idx].flatten()
 
     rgb_diff = np.zeros((3, 4))
     lab_diff = np.zeros((3, 4))
@@ -247,7 +247,7 @@ def compat_features(c1, c2, c3, c4, c5):
 
         minSatVal = min(np.concatenate((hsv[i-1:i, 1], hsv[i-1:i, 2])))
         if minSatVal >= 0.2:
-            pts = sort([hsv[i, 1], hsv[i-1, 1]])
+            pts = np.sort([hsv[i, 1], hsv[i-1, 1]])
             hsv_diff[0, i-1] = min(pts[1] - pts[0], 1-(pts[1] - pts[0]))
         hsv_diff[1, i-1] = hsv[i, 1] - hsv[i - 1, 1]
         hsv_diff[2, i-1] = hsv[i, 2] - hsv[i - 1, 2]
@@ -292,46 +292,46 @@ def compat_features(c1, c2, c3, c4, c5):
     chsv_range = chsv_max - chsv_min
 
     return np.concatenate((
-        np.flatten(chsv),
-        np.flatten(chsv_sorted),
-        np.flatten(chsv_diff),
-        np.flatten(sort_chsv_diff),
-        np.flatten(chsv_mean),
-        np.flatten(chsv_std),
-        np.flatten(chsv_median),
-        np.flatten(chsv_max),
-        np.flatten(chsv_min),
-        np.flatten(chsv_range),
-        np.flatten(lab),
-        np.flatten(lab_sorted),
-        np.flatten(lab_diff),
-        np.flatten(sort_lab_diff),
-        np.flatten(lab_mean),
-        np.flatten(lab_std),
-        np.flatten(lab_median),
-        np.flatten(lab_max),
-        np.flatten(lab_min),
-        np.flatten(lab_range),
-        np.flatten(hsv),
-        np.flatten(hsv_sorted),
-        np.flatten(hsv_diff),
-        np.flatten(sort_hsv_diff),
-        np.flatten(hsv_mean),
-        np.flatten(hsv_std),
-        np.flatten(hsv_median),
-        np.flatten(hsv_max),
-        np.flatten(hsv_min),
-        np.flatten(hsv_range),
-        np.flatten(rgb),
-        np.flatten(rgb_sorted),
-        np.flatten(rgb_diff),
-        np.flatten(sort_rgb_diff),
-        np.flatten(rgb_mean),
-        np.flatten(rgb_std),
-        np.flatten(rgb_median),
-        np.flatten(rgb_max),
-        np.flatten(rgb_min),
-        np.flatten(rgb_range)
+        chsv.flatten(),
+        chsv_sorted.flatten(),
+        chsv_diff.flatten(),
+        sort_chsv_diff.flatten(),
+        chsv_mean.flatten(),
+        chsv_std.flatten(),
+        chsv_median.flatten(),
+        chsv_max.flatten(),
+        chsv_min.flatten(),
+        chsv_range.flatten(),
+        lab.flatten(),
+        lab_sorted.flatten(),
+        lab_diff.flatten(),
+        sort_lab_diff.flatten(),
+        lab_mean.flatten(),
+        lab_std.flatten(),
+        lab_median.flatten(),
+        lab_max.flatten(),
+        lab_min.flatten(),
+        lab_range.flatten(),
+        hsv.flatten(),
+        hsv_sorted.flatten(),
+        hsv_diff.flatten(),
+        sort_hsv_diff.flatten(),
+        hsv_mean.flatten(),
+        hsv_std.flatten(),
+        hsv_median.flatten(),
+        hsv_max.flatten(),
+        hsv_min.flatten(),
+        hsv_range.flatten(),
+        rgb.flatten(),
+        rgb_sorted.flatten(),
+        rgb_diff.flatten(),
+        sort_rgb_diff.flatten(),
+        rgb_mean.flatten(),
+        rgb_std.flatten(),
+        rgb_median.flatten(),
+        rgb_max.flatten(),
+        rgb_min.flatten(),
+        rgb_range.flatten()
     ))
 
 
@@ -465,8 +465,13 @@ def score_adj(h, sp12, cp12, enc_str):
     p = prob_dist(cp12)
     return np.log(p) * enc_str, p
 
-def score_cmp():
-    pass 
+def score_cmp(model, palette):
+    colors = palette
+    while len(colors) < 5:
+        colors.append(palette[-1])
+    compat_f = compat_features(colors[0], colors[1], colors[2], colors[3], colors[4])
+    p = model.predict([compat_f])[0]
+    return np.log(p/7), p
 
 # should return a probability distribution
 def factor_graph(pattern, weights):
@@ -556,9 +561,10 @@ def main():
     end = 1700
     pickle_file = 'patterns.pickle'
     histogram_file = 'histogram.pickle'
+    ratings_file = 'ratings.pickle'
     unary = True
     pairwise = True
-    test_idx = [4]
+    test_idx = [83]
 
     if processing:
         with open(pickle_file, 'ab') as pf:
@@ -702,10 +708,25 @@ def main():
                     chrom_diff_acc = chrom_diff_histogram.train(adj_spatial_properties, chrom_diff)
                     print("Chromatic Difference Histogram done...\n")
 
+                    print('--- Compatibility Training ---')
+                    all_compat_features = np.array([])
+
+                    for patt in all_patterns:
+                        colors = patt.palette
+                        while len(colors) < 5:
+                            colors.append(patt.palette[-1])
+                        all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
+
+                    with open(ratings_file, 'rb') as rf:
+                        ratings = pickle.load(rf)
+                    compat_model = linear_model.Lasso().fit(all_compat_features, ratings)
+                    print('Compatibility model done...\n')
+
                     pickle.dump(per_diff_histogram, hf, protocol=4)
                     pickle.dump(rel_light_histogram, hf, protocol=4)
                     pickle.dump(rel_sat_histogram, hf, protocol=4)
                     pickle.dump(chrom_diff_histogram, hf, protocol=4)
+                    pickle.dump(compat_model, hf, protocol=4)
 
         else:
             with open(histogram_file, 'rb') as hf:
@@ -717,20 +738,7 @@ def main():
                 rel_light_histogram = pickle.load(hf)
                 rel_sat_histogram = pickle.load(hf)
                 chrom_diff_histogram = pickle.load(hf)
-
-        # train compat model
-
-        # all_compat_features = np.array([])
-
-        # for patt in all_patterns:
-        #     colors = patt.palette
-        #     while len(colors) < 5:
-        #         colors.append(patt.palette[-1])
-        #     all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
-
-        # ratings = 
-        # compat_model = linear_model.Lasso().fit(all_compat_features, ratings)
-        
+                compat_model = pickle.load(hf)
 
         for i in test_idx:
             patt = all_patterns[i]
@@ -741,7 +749,7 @@ def main():
             # for cg1 in patt.color_groups:
             #     print('Color group color:', cg1.color)
             #     print('    Segments:', [seg.id for seg in cg1.color_segments])
-            #     print()
+            print()
 
             for cg in patt.color_groups[:1]:
                 print('--- Color Group Results ---')
@@ -838,9 +846,11 @@ def main():
                                         print()
                                         
             
-            colors = patt.palette
-            while len(colors) < 5:
-                colors.append(patt.palette[-1])
-            compat_f = compat_features(colors[0], colors[1], colors[2], colors[3], colors[4])
+            print('--- Color Compatibility ---')
+            cmp_score, cmp_p = score_cmp(compat_model, patt.palette)
+            print('Raw Score:', np.round(cmp_p, decimals=4))
+            print('Score:', np.round(cmp_score, decimals=4))
 
-            # lasso_regression(compat_f, )
+if __name__ == "__main__":
+    main()
+    # print(compat_features("FFE3A1", "F7F4CB", "99D9C0", "F2B385", "CC7A80"))
