@@ -188,7 +188,7 @@ def segment_image(img, palette):
         for j in range(img.shape[1]):
             if (i,j) in visited:
                 continue
-            rgb_hex = get_nearest_rgb(img_cpy[i][j],palette)
+            rgb_hex = get_color(img_cpy,i,j,palette)
             seg = getsegment(img_cpy,i,j,palette,visited,px2id,adjacency,seg_id)
             segments[rgb_hex].append(seg)
             seg_id += 1

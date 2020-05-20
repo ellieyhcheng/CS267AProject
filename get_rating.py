@@ -4,7 +4,6 @@ import urllib.request
 from thing import Pattern, ColorGroup, ColorGroupSegment
 import pickle
 
-f = open("test_set2/test.csv", 'r')
 h = open("ratings.pickle", 'ab')
 ratings = []
 all_patterns = []
@@ -35,7 +34,4 @@ for patt in all_patterns:
 
 pickle.dump(ratings, h, protocol=4)
 
-f.close()
 h.close()
-# lab = color.rgb2lab(rgb)
-# map each pixel to a the closest color in source palette
