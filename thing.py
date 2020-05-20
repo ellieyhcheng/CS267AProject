@@ -556,7 +556,7 @@ def main():
     unary = True
     pairwise = True
     compat = True
-    test_idx = [1]
+    test_idx = [4]
 
     print('Retrieving patterns')
     all_patterns = []
