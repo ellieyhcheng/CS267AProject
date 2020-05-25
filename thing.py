@@ -694,7 +694,38 @@ def sample(weights, pattern, num_iters, start=None):
             palette = prop
 
     return palette
+
+def find_good_images(weights, pattern, num_iters, num_images):
+    get_prob = factor_graph(pattern)
+
+    #initialize mcmc chains
+    chains = []
+    num_colors = len(pattern.palette)
+    for i in range(num_images):
+        palette = []
+        for j in range(num_colors):
+            r = np.random.randint(0,256)
+            g = np.random.randint(0,256)
+            b = np.random.randint(0,256)
+            palette.append(rgb2hex((r,g,b)))
+        chains.append(palette)
     
+    start_temp = 50
+    for i in range(num_iters):
+        curr_temp = (num_iters - i) * start_temp / num_iters
+        for j in range(num_images):
+            old_palette = chains[j]
+            prop = perturb(old_palette.copy(), temperature)
+            denom = get_prob(weights,palette)
+            if denom == 0:
+                chains[j] = prop
+                continue
+            acceptance = get_prob(weights,prop)/denom
+            u = np.random.rand()
+            if u <= acceptance:
+                chains[j] = prop
+    return chains
+
     
 def perturb(palette, temp):
     num = len(palette)
@@ -707,7 +738,7 @@ def perturb(palette, temp):
     palette[color2] = oopsies
 
     # perturb randomly chosen color
-    rate = 0.5
+    rate = 1
     sigma = rate * temp
 
     color = np.random.randint(0,num)
