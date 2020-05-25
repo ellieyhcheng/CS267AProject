@@ -14,13 +14,13 @@ from thing import ColorGroup, Pattern, ColorGroupSegment
 
 def preprocess():
     pickle_file = 'patterns.pickle'
-    count = 0
+    count = 1268
     end = 1700
 
     with open(pickle_file, 'ab') as pf:
         with open(os.path.join('test_set2', 'test.csv')) as csvfile:
-            with open('dataset.csv', 'w') as datafile:
-                datafile.write('artist,patternId,previewImage,palette,rating\n')
+            with open('dataset.csv', 'a') as datafile:
+                # datafile.write('artist,patternId,previewImage,palette,rating\n')
 
                 reader = list(csv.DictReader(csvfile))
                 while (count < end) and (count < len(reader)):

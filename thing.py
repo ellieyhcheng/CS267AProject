@@ -81,7 +81,7 @@ def relative_size(segments, color):
     group_areas = [sum(len(s) for s in group) for group in segments.values()]
     max_group_area = max(group_areas)
     total_area = sum(group_areas)
-    return area,total_area, area/max_group_area
+    return area/total_area, area/max_group_area
 
 def segment_spread(color_group):
     centroids = np.array([centroid(s) for s in color_group])
@@ -525,25 +525,25 @@ def train_weights(all_patterns):
                 saturation_score, _ = score_grp(saturation_histogram, cg.spatial_property, saturation(hex2lab(cur_color)), cg.area)
                 sum_segment_lightness_score, sum_segment_saturation_score, sum_per_diff_score, sum_rel_light_score, sum_rel_sat_score, sum_chrom_diff_score = 0, 0, 0, 0, 0, 0
 
-                for cs in cg.color_segments[:10]:
+                for cs in cg.color_segments[:5]:
                     segment_lightness_score, _ = score_seg(segment_lightness_histogram, cs.spatial_property, lightness(hex2lab(cur_color)), cs.area)
                     segment_saturation_score, _ = score_seg(segment_saturation_histogram, cs.spatial_property, saturation(hex2lab(cur_color)), cs.area)
                     sum_segment_lightness_score += segment_lightness_score
                     sum_segment_saturation_score += segment_saturation_score
 
-                    adj_ids = list(cs.enclosure_strength.keys())
-                    count = 0
-                    n_adj = 5
+                    adj_ids = list(cs.enclosure_strength.keys())[:5]
+                    # count = 0
+                    # n_adj = 5
 
                     for j, cg1 in enumerate(pattern.color_groups):
-                        if count > n_adj:
-                            break
+                        # if count > n_adj:
+                        #     break
                         adj_color = palette[j]
                         for seg1 in cg1.color_segments:
-                            if count > n_adj:
-                                break
+                            # if count > n_adj:
+                            #     break
                             if seg1.id in adj_ids:
-                                count += 1
+                                # count += 1
                                 sp12 = np.concatenate((cs.spatial_property, seg1.spatial_property))
                                 cp12 = perceptual_diff(hex2lab(cur_color), hex2lab(adj_color))
                                 enc = cs.enclosure_strength[seg1.id]
@@ -609,17 +609,19 @@ def factor_graph(pattern):
         for i, cg in enumerate(pattern.color_groups):
             cur_color = palette[i]
 
-            lightness_score, _ = score_grp(lightness_histogram, cg.spatial_property, lightness(hex2lab(cur_color)), cg.area)
+            lightness_score, lightness_p = score_grp(lightness_histogram, cg.spatial_property, lightness(hex2lab(cur_color)), cg.area)
             saturation_score, _ = score_grp(saturation_histogram, cg.spatial_property, saturation(hex2lab(cur_color)), cg.area)
+            # print(lightness_score, lightness_p)
+
             sum_segment_lightness_score, sum_segment_saturation_score, sum_per_diff_score, sum_rel_light_score, sum_rel_sat_score, sum_chrom_diff_score = 0, 0, 0, 0, 0, 0
 
-            for cs in cg.color_segments[:10]:
+            for cs in cg.color_segments[:5]:
                 segment_lightness_score, _ = score_seg(segment_lightness_histogram, cs.spatial_property, lightness(hex2lab(cur_color)), cs.area)
                 segment_saturation_score, _ = score_seg(segment_saturation_histogram, cs.spatial_property, saturation(hex2lab(cur_color)), cs.area)
                 sum_segment_lightness_score += segment_lightness_score
                 sum_segment_saturation_score += segment_saturation_score
 
-                adj_ids = list(cs.enclosure_strength.keys())
+                adj_ids = list(cs.enclosure_strength.keys())[:5]
 
                 for j, cg1 in enumerate(pattern.color_groups):
                     adj_color = palette[j]
@@ -769,14 +771,14 @@ def recolor(img, original, new_palette):
     return newimg
 
 def main():
-    training = True
+    training = False
     testing = True
-    unary = True
-    pairwise = True
-    compat = True
+    unary = False
+    pairwise = False
+    compat = False
     wei = True
     num_patterns = 1600
-    test_idx = [0]
+    test_idx = [x for x in range(10)]
     img_path = ''
 
     print('Retrieving patterns')
@@ -793,107 +795,108 @@ def main():
     print()
 
     if training:
-        with open(histogram_file, 'wb') as hf:
-            if unary:
-                all_color_groups = [cg for patt in all_patterns for cg in patt.color_groups]
-                spatial_properties = [x.spatial_property for x in all_color_groups]
-                l_values = [lightness(hex2lab(x.color)) for x in all_color_groups]
-                s_values = [saturation(hex2lab(x.color)) for x in all_color_groups]
+        if unary or pairwise or compat:
+            with open(histogram_file, 'wb') as hf:
+                if unary:
+                    all_color_groups = [cg for patt in all_patterns for cg in patt.color_groups]
+                    spatial_properties = [x.spatial_property for x in all_color_groups]
+                    l_values = [lightness(hex2lab(x.color)) for x in all_color_groups]
+                    s_values = [saturation(hex2lab(x.color)) for x in all_color_groups]
 
-                print('--- Unary Training ---')
-                lightness_histogram = Histogram()
-                lacc = lightness_histogram.train(spatial_properties, l_values)
-                print("Lightness Histogram done...")
+                    print('--- Unary Training ---')
+                    lightness_histogram = Histogram()
+                    lacc = lightness_histogram.train(spatial_properties, l_values)
+                    print("Lightness Histogram done...")
 
-                saturation_histogram = Histogram()
-                sacc = saturation_histogram.train(spatial_properties, s_values)
-                print("Saturation Histogram done...\n")
+                    saturation_histogram = Histogram()
+                    sacc = saturation_histogram.train(spatial_properties, s_values)
+                    print("Saturation Histogram done...\n")
 
-                segment_spatial_properties = [x.spatial_property for cg in all_color_groups for x in cg.color_segments ] 
-                segment_l_values = [lightness(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments]
-                segment_s_values = [saturation(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments]
-                
-                segment_lightness_histogram = Histogram()
-                segment_lacc = segment_lightness_histogram.train(segment_spatial_properties, segment_l_values)
-                print("Segment Lightness Histogram done...")
+                    segment_spatial_properties = [x.spatial_property for cg in all_color_groups for x in cg.color_segments[:10] ] 
+                    segment_l_values = [lightness(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments[:10]]
+                    segment_s_values = [saturation(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments[:10]]
+                    
+                    segment_lightness_histogram = Histogram()
+                    segment_lacc = segment_lightness_histogram.train(segment_spatial_properties, segment_l_values)
+                    print("Segment Lightness Histogram done...")
 
-                segment_saturation_histogram = Histogram()
-                segment_sacc = segment_saturation_histogram.train(segment_spatial_properties, segment_s_values)
-                print("Segment Saturation Histogram done...\n")
+                    segment_saturation_histogram = Histogram()
+                    segment_sacc = segment_saturation_histogram.train(segment_spatial_properties, segment_s_values)
+                    print("Segment Saturation Histogram done...\n")
 
-                pickle.dump(lightness_histogram, hf, protocol=4)
-                pickle.dump(saturation_histogram, hf, protocol=4)
-                pickle.dump(segment_lightness_histogram, hf, protocol=4)
-                pickle.dump(segment_saturation_histogram, hf, protocol=4)
+                    pickle.dump(lightness_histogram, hf, protocol=4)
+                    pickle.dump(saturation_histogram, hf, protocol=4)
+                    pickle.dump(segment_lightness_histogram, hf, protocol=4)
+                    pickle.dump(segment_saturation_histogram, hf, protocol=4)
 
-            if pairwise:
-                adj_spatial_properties = []
-                per_diff = []
-                rel_light = []
-                rel_sat = []
-                chrom_diff = []
-                
-                for patt in all_patterns:
-                    for cg in patt.color_groups:
-                        for seg in cg.color_segments[:5]:
-                            adj_ids = seg.enclosure_strength.keys()
+                if pairwise:
+                    adj_spatial_properties = []
+                    per_diff = []
+                    rel_light = []
+                    rel_sat = []
+                    chrom_diff = []
+                    
+                    for patt in all_patterns:
+                        for cg in patt.color_groups:
+                            for seg in cg.color_segments[:5]:
+                                adj_ids = list(seg.enclosure_strength.keys())[:5]
 
-                            for cg1 in patt.color_groups:
-                                if cg.color != cg1.color:
-                                    for seg1 in cg1.color_segments:
-                                        if seg1.id in adj_ids:
-                                            adj_spatial_properties.append(np.concatenate((seg.spatial_property, seg1.spatial_property)))
-                                            per_diff.append(perceptual_diff(hex2lab(seg.color), hex2lab(seg1.color)))
-                                            rel_light.append(relative_lightness(hex2lab(seg.color), hex2lab(seg1.color)))
-                                            rel_sat.append(relative_saturation(hex2lab(seg.color), hex2lab(seg1.color)))
-                                            chrom_diff.append(chromatic_difference(hex2lab(seg.color), hex2lab(seg1.color)))
+                                for cg1 in patt.color_groups:
+                                    if cg.color != cg1.color:
+                                        for seg1 in cg1.color_segments:
+                                            if seg1.id in adj_ids:
+                                                adj_spatial_properties.append(np.concatenate((seg.spatial_property, seg1.spatial_property)))
+                                                per_diff.append(perceptual_diff(hex2lab(seg.color), hex2lab(seg1.color)))
+                                                rel_light.append(relative_lightness(hex2lab(seg.color), hex2lab(seg1.color)))
+                                                rel_sat.append(relative_saturation(hex2lab(seg.color), hex2lab(seg1.color)))
+                                                chrom_diff.append(chromatic_difference(hex2lab(seg.color), hex2lab(seg1.color)))
 
-                print('--- Pairwise Training ---')
-                per_diff_histogram = Histogram()
-                per_diff_acc = per_diff_histogram.train(adj_spatial_properties, per_diff)
-                print("Pereceptual Difference Histogram done...")
+                    print('--- Pairwise Training ---')
+                    per_diff_histogram = Histogram()
+                    per_diff_acc = per_diff_histogram.train(adj_spatial_properties, per_diff)
+                    print("Pereceptual Difference Histogram done...")
 
-                rel_light_histogram = Histogram()
-                rel_light_acc = rel_light_histogram.train(adj_spatial_properties, rel_light)
-                print("Relative Lightness Histogram done...")
+                    rel_light_histogram = Histogram()
+                    rel_light_acc = rel_light_histogram.train(adj_spatial_properties, rel_light)
+                    print("Relative Lightness Histogram done...")
 
-                rel_sat_histogram = Histogram()
-                rel_sat_acc = rel_sat_histogram.train(adj_spatial_properties, rel_sat)
-                print("Relative Saturation Histogram done...")
+                    rel_sat_histogram = Histogram()
+                    rel_sat_acc = rel_sat_histogram.train(adj_spatial_properties, rel_sat)
+                    print("Relative Saturation Histogram done...")
 
-                chrom_diff_histogram = Histogram()
-                chrom_diff_acc = chrom_diff_histogram.train(adj_spatial_properties, chrom_diff)
-                print("Chromatic Difference Histogram done...\n")
+                    chrom_diff_histogram = Histogram()
+                    chrom_diff_acc = chrom_diff_histogram.train(adj_spatial_properties, chrom_diff)
+                    print("Chromatic Difference Histogram done...\n")
 
-                pickle.dump(per_diff_histogram, hf, protocol=4)
-                pickle.dump(rel_light_histogram, hf, protocol=4)
-                pickle.dump(rel_sat_histogram, hf, protocol=4)
-                pickle.dump(chrom_diff_histogram, hf, protocol=4)
+                    pickle.dump(per_diff_histogram, hf, protocol=4)
+                    pickle.dump(rel_light_histogram, hf, protocol=4)
+                    pickle.dump(rel_sat_histogram, hf, protocol=4)
+                    pickle.dump(chrom_diff_histogram, hf, protocol=4)
 
-            if compat:
-                print('--- Compatibility Training ---')
-                all_compat_features = []
+                if compat:
+                    print('--- Compatibility Training ---')
+                    all_compat_features = []
 
-                for patt in all_patterns:
-                    colors = patt.palette
-                    while len(colors) < 5:
-                        colors.append(patt.palette[-1])
-                    all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
+                    for patt in all_patterns:
+                        colors = patt.palette
+                        while len(colors) < 5:
+                            colors.append(patt.palette[-1])
+                        all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
 
-                ratings = [patt.rating for patt in all_patterns]
-                compat_model = Lasso(alpha=0.01).fit(all_compat_features, ratings)
-                print('Compatibility model done...\n')
-                
-                pickle.dump(compat_model, hf, protocol=4)
+                    ratings = [patt.rating for patt in all_patterns]
+                    compat_model = Lasso(alpha=0.01).fit(all_compat_features, ratings)
+                    print('Compatibility model done...\n')
+                    
+                    pickle.dump(compat_model, hf, protocol=4)
 
-            if wei:
-                small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 500]
-                weights = train_weights(small_patts)
+        if wei:
+            small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 500]
+            weights = train_weights(small_patts)
 
-                with open('weights.pickle', 'wb') as wf:
-                    pickle.dump(weights, wf, protocol=4)
-                
-                print("Weights training done...\n")
+            with open('weights.pickle', 'wb') as wf:
+                pickle.dump(weights, wf, protocol=4)
+            
+            print("Weights training done...\n")
     else:
         with open(histogram_file, 'rb') as hf:
             lightness_histogram = pickle.load(hf)
@@ -910,9 +913,9 @@ def main():
             weights = pickle.load(wf)
         
         if testing:
-            small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 100]
+            small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 500]
             for i in test_idx:
-                pattern = patterns[i]
+                pattern = small_patts[i]
                 print("Image ", pattern.img_num)
 
                 old_palette = pattern.palette
@@ -938,7 +941,7 @@ def main():
                 ax[0].imshow(testimg)
                 ax[1].imshow(rand_img)
                 ax[2].imshow(new_img)
-                plt.show()
+                fig.show()
                 plt.savefig('{}_new.png'.format(pattern.img_num))
 
         else:
