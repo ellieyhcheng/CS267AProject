@@ -444,9 +444,10 @@ class ColorGroupSegment:
         self.id = cs_id
         self.color = color
         self.enclosure_strength = enclosure_strength
-        self.area = relative_size_to_pattern
 
         relative_size_to_pattern, relative_size_to_group = relative_size_ind(segment,segments)
+        self.area = relative_size_to_pattern
+
         num_neighbors = normalized_discrete_compactness(pattern_width, pattern_height, segment)
         elon = elongation(segment)
         label = label # foreground = 1, background = 0
@@ -743,7 +744,7 @@ def main():
     pairwise = True
     compat = True
     wei = True
-    num_patterns = 50
+    num_patterns = 1600
     test_idx = [0]
     img_path = ''
 
@@ -855,7 +856,7 @@ def main():
                 pickle.dump(compat_model, hf, protocol=4)
 
             if wei:
-                small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 100]
+                small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 500]
                 weights = train_weights(small_patts)
 
                 with open('weights.pickle', 'wb') as wf:
@@ -884,7 +885,7 @@ def main():
                 print("Image ", pattern.img_num)
 
                 old_palette = pattern.palette
-                new_palette = sample(weights, pattern, 5)
+                new_palette = sample(weights, pattern, 10)
 
                 testimg_file = os.path.join('test_set2', str(pattern.img_num)+'.png')
                 testimg = Image.open(testimg_file)
