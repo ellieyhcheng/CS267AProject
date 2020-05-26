@@ -729,6 +729,58 @@ def find_good_images(weights, pattern, num_iters, num_images):
                 chains[j] = prop
     return chains
 
+def find_good_images_2(weights, pattern, num_iters, max_images, start_palette=None):
+    get_prob = factor_graph(pattern)
+
+    num_images = 0
+    num_colors = len(pattern.palette)
+
+    good_images = []
+
+    #initialize mcmc chain
+    curr_palette = start_palette
+    if curr_palette is None:
+        for j in range(num_colors):
+            r = np.random.randint(0,256)
+            g = np.random.randint(0,256)
+            b = np.random.randint(0,256)
+            curr_palette.append(rgb2hex((r,g,b)))
+    
+    high_temp = 50
+    low_temp = 3
+
+    #jump 10 times at each temperature and output highest probability image
+    max_prob = 0
+    best_palette = None
+    for i in range(num_iters):
+        if num_images >= max_images:
+            break
+        curr_temp = high_temp
+        if i % 20 < 10:
+            curr_temp = high_temp
+        else:
+            curr_temp = low_temp
+
+        prop = perturb(curr_palette.copy(), curr_temp)
+        denom = get_prob(weights,curr_palette)
+        if denom == 0:
+            curr_palette = prop
+            continue
+        curr_prob = get_prob(weights,prop)
+        acceptance = curr_prob/denom
+        u = np.random.rand()
+        if u <= acceptance:
+            curr_palette = prop
+            
+        if curr_prob >= max_prob:
+            max_prob = curr_prob
+            best_palette = curr_palette
+
+        if i & 20 == 19:
+            max_prob = 0
+            good_images.append(curr_palette)
+    
+    return good_images
     
 def perturb(palette, temp):
     num = len(palette)
