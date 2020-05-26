@@ -715,8 +715,8 @@ def find_good_images(weights, pattern, num_iters, num_images):
         curr_temp = (num_iters - i) * start_temp / num_iters
         for j in range(num_images):
             old_palette = chains[j]
-            prop = perturb(old_palette.copy(), temperature)
-            denom = get_prob(weights,palette)
+            prop = perturb(old_palette.copy(), curr_temp)
+            denom = get_prob(weights,old_palette)
             if denom == 0:
                 chains[j] = prop
                 continue
