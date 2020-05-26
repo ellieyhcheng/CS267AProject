@@ -13,20 +13,20 @@ from segment import segment_image, get_color_groups, hex2rgb, enclosure_strength
 from thing import ColorGroup, Pattern, ColorGroupSegment
 
 def preprocess():
-    pickle_file = 'sugar_patterns.pickle'
+    pickle_file = 'shsh_patterns.pickle'
     count = 0
     end = 1700
 
     with open(pickle_file, 'ab') as pf:
         with open(os.path.join('test_set2', 'test.csv')) as csvfile:
-            with open('sugar_dataset.csv', 'a') as datafile:
+            with open('shsh_dataset.csv', 'a') as datafile:
                 datafile.write('artist,patternId,previewImage,palette,rating\n')
 
                 reader = list(csv.DictReader(csvfile))
                 while (count < end) and (count < len(reader)):
                     row = reader[count]
                     
-                    if row['artist'] != 'sugar!':
+                    if row['artist'] != 'shsh':
                         count += 1
                         continue
 
