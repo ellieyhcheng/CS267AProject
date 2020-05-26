@@ -4,3 +4,4 @@ test_set2*
 .vscode
 __pycache__
 *.pickle
+*dataset.csv
