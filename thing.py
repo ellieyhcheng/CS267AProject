@@ -28,9 +28,9 @@ from math import cos, sin
 
 # http://graphics.stanford.edu/projects/patternColoring/
 
-pickle_file = 'patterns.pickle'
-histogram_file = 'histogram.pickle'
-
+pickle_file = 'sugar_patterns.pickle'
+histogram_file = 'sugar_histogram.pickle'
+weights_file = 'sguar_weights.pickle'
 
 def hex2lab(color):
     r,g,b = hex2rgb(color)
@@ -495,7 +495,7 @@ def train_weights(all_patterns):
     weights = np.ones((9,))
 
     N = len(all_patterns)
-    learning_rate = 1
+    learning_rate = 1000
     k = 10
 
     cg_lightness_w = weights[0]
@@ -509,71 +509,72 @@ def train_weights(all_patterns):
     cmp_w = weights[8]
     
     # 1 update
-    diff = np.zeros((9,))
     
-    for pattern in all_patterns:
-        # do MCMC for k steps to get c_hat
-        c_hat = sample(weights, pattern, k, pattern.palette)
-        
-        scores = np.ones((2,9))
+    for it in range(10):
+        diff = np.zeros((9,))
+        for pattern in all_patterns:
+            # do MCMC for k steps to get c_hat
+            c_hat = sample(weights, pattern, k, pattern.palette)
+            
+            scores = np.ones((2,9))
 
-        for k, palette in enumerate([pattern.palette, c_hat]):
-            for i, cg in enumerate(pattern.color_groups):
-                cur_color = palette[i]
+            for k, palette in enumerate([pattern.palette, c_hat]):
+                for i, cg in enumerate(pattern.color_groups):
+                    cur_color = palette[i]
 
-                lightness_score, _ = score_grp(lightness_histogram, cg.spatial_property, lightness(hex2lab(cur_color)), cg.area)
-                saturation_score, _ = score_grp(saturation_histogram, cg.spatial_property, saturation(hex2lab(cur_color)), cg.area)
-                sum_segment_lightness_score, sum_segment_saturation_score, sum_per_diff_score, sum_rel_light_score, sum_rel_sat_score, sum_chrom_diff_score = 0, 0, 0, 0, 0, 0
+                    lightness_score, _ = score_grp(lightness_histogram, cg.spatial_property, lightness(hex2lab(cur_color)), cg.area)
+                    saturation_score, _ = score_grp(saturation_histogram, cg.spatial_property, saturation(hex2lab(cur_color)), cg.area)
+                    sum_segment_lightness_score, sum_segment_saturation_score, sum_per_diff_score, sum_rel_light_score, sum_rel_sat_score, sum_chrom_diff_score = 0, 0, 0, 0, 0, 0
 
-                for cs in cg.color_segments[:5]:
-                    segment_lightness_score, _ = score_seg(segment_lightness_histogram, cs.spatial_property, lightness(hex2lab(cur_color)), cs.area)
-                    segment_saturation_score, _ = score_seg(segment_saturation_histogram, cs.spatial_property, saturation(hex2lab(cur_color)), cs.area)
-                    sum_segment_lightness_score += segment_lightness_score
-                    sum_segment_saturation_score += segment_saturation_score
+                    for cs in cg.color_segments[:10]:
+                        segment_lightness_score, _ = score_seg(segment_lightness_histogram, cs.spatial_property, lightness(hex2lab(cur_color)), cs.area)
+                        segment_saturation_score, _ = score_seg(segment_saturation_histogram, cs.spatial_property, saturation(hex2lab(cur_color)), cs.area)
+                        sum_segment_lightness_score += segment_lightness_score
+                        sum_segment_saturation_score += segment_saturation_score
 
-                    adj_ids = list(cs.enclosure_strength.keys())[:5]
-                    # count = 0
-                    # n_adj = 5
+                        adj_ids = list(cs.enclosure_strength.keys())[:10]
+                        # count = 0
+                        # n_adj = 5
 
-                    for j, cg1 in enumerate(pattern.color_groups):
-                        # if count > n_adj:
-                        #     break
-                        adj_color = palette[j]
-                        for seg1 in cg1.color_segments:
+                        for j, cg1 in enumerate(pattern.color_groups):
                             # if count > n_adj:
                             #     break
-                            if seg1.id in adj_ids:
-                                # count += 1
-                                sp12 = np.concatenate((cs.spatial_property, seg1.spatial_property))
-                                cp12 = perceptual_diff(hex2lab(cur_color), hex2lab(adj_color))
-                                enc = cs.enclosure_strength[seg1.id]
+                            adj_color = palette[j]
+                            for seg1 in cg1.color_segments:
+                                # if count > n_adj:
+                                #     break
+                                if seg1.id in adj_ids:
+                                    # count += 1
+                                    sp12 = np.concatenate((cs.spatial_property, seg1.spatial_property))
+                                    cp12 = perceptual_diff(hex2lab(cur_color), hex2lab(adj_color))
+                                    enc = cs.enclosure_strength[seg1.id]
 
-                                per_diff_score, _ = score_adj(per_diff_histogram, sp12, cp12, enc)
-                                sum_per_diff_score += per_diff_score
-                                rel_light_score, _ = score_adj(rel_light_histogram, sp12, relative_lightness(hex2lab(cur_color), hex2lab(adj_color)), enc)
-                                sum_rel_light_score += rel_light_score
-                                rel_sat_score, _ = score_adj(rel_sat_histogram, sp12, relative_saturation(hex2lab(cur_color), hex2lab(adj_color)), enc)
-                                sum_rel_sat_score += rel_sat_score
-                                chrom_diff_score, _ = score_adj(chrom_diff_histogram, sp12, chromatic_difference(hex2lab(cur_color), hex2lab(adj_color)), enc)
-                                sum_chrom_diff_score += chrom_diff_score
+                                    per_diff_score, _ = score_adj(per_diff_histogram, sp12, cp12, enc)
+                                    sum_per_diff_score += per_diff_score
+                                    rel_light_score, _ = score_adj(rel_light_histogram, sp12, relative_lightness(hex2lab(cur_color), hex2lab(adj_color)), enc)
+                                    sum_rel_light_score += rel_light_score
+                                    rel_sat_score, _ = score_adj(rel_sat_histogram, sp12, relative_saturation(hex2lab(cur_color), hex2lab(adj_color)), enc)
+                                    sum_rel_sat_score += rel_sat_score
+                                    chrom_diff_score, _ = score_adj(chrom_diff_histogram, sp12, chromatic_difference(hex2lab(cur_color), hex2lab(adj_color)), enc)
+                                    sum_chrom_diff_score += chrom_diff_score
 
-                scores[k][0] *= lightness_score
-                scores[k][1] *= sum_segment_lightness_score
-                scores[k][2] *= saturation_score
-                scores[k][3] *= sum_segment_saturation_score
-                scores[k][4] *= sum_per_diff_score
-                scores[k][5] *= sum_rel_light_score
-                scores[k][6] *= sum_rel_sat_score
-                scores[k][7] *= sum_chrom_diff_score
+                    scores[k][0] *= lightness_score
+                    scores[k][1] *= sum_segment_lightness_score
+                    scores[k][2] *= saturation_score
+                    scores[k][3] *= sum_segment_saturation_score
+                    scores[k][4] *= sum_per_diff_score
+                    scores[k][5] *= sum_rel_light_score
+                    scores[k][6] *= sum_rel_sat_score
+                    scores[k][7] *= sum_chrom_diff_score
 
-            compat_score, _ = score_cmp(compat_model, palette)
-            scores[k][8] *= compat_score
+                compat_score, _ = score_cmp(compat_model, palette)
+                scores[k][8] *= compat_score
 
-    
-        diff = np.add(diff, np.subtract(scores[0], scores[1]))
         
-    # We subtract because the derivatives point in direction of steepest ascent
-    weights = np.maximum(np.subtract(weights, (diff / float(N)) * learning_rate), 0)
+            diff = np.add(diff, np.subtract(scores[0], scores[1]))
+            
+        # We subtract because the derivatives point in direction of steepest ascent
+        weights = np.maximum(np.subtract(weights, (diff / float(N)) * learning_rate), 0)
     
     return weights
 
@@ -615,13 +616,13 @@ def factor_graph(pattern):
 
             sum_segment_lightness_score, sum_segment_saturation_score, sum_per_diff_score, sum_rel_light_score, sum_rel_sat_score, sum_chrom_diff_score = 0, 0, 0, 0, 0, 0
 
-            for cs in cg.color_segments[:5]:
+            for cs in cg.color_segments[:10]:
                 segment_lightness_score, _ = score_seg(segment_lightness_histogram, cs.spatial_property, lightness(hex2lab(cur_color)), cs.area)
                 segment_saturation_score, _ = score_seg(segment_saturation_histogram, cs.spatial_property, saturation(hex2lab(cur_color)), cs.area)
                 sum_segment_lightness_score += segment_lightness_score
                 sum_segment_saturation_score += segment_saturation_score
 
-                adj_ids = list(cs.enclosure_strength.keys())[:5]
+                adj_ids = list(cs.enclosure_strength.keys())[:10]
 
                 for j, cg1 in enumerate(pattern.color_groups):
                     adj_color = palette[j]
@@ -717,8 +718,8 @@ def find_good_images(weights, pattern, num_iters, num_images):
         curr_temp = (num_iters - i) * start_temp / num_iters
         for j in range(num_images):
             old_palette = chains[j]
-            prop = perturb(old_palette.copy(), temperature)
-            denom = get_prob(weights,palette)
+            prop = perturb(old_palette.copy(), curr_temp)
+            denom = get_prob(weights,old_palette)
             if denom == 0:
                 chains[j] = prop
                 continue
@@ -777,8 +778,8 @@ def main():
     pairwise = False
     compat = False
     wei = True
-    num_patterns = 1600
-    test_idx = [x for x in range(10)]
+    num_patterns = 100
+    test_idx = [x for x in range(11,12)]
     img_path = ''
 
     print('Retrieving patterns')
@@ -812,9 +813,9 @@ def main():
                     sacc = saturation_histogram.train(spatial_properties, s_values)
                     print("Saturation Histogram done...\n")
 
-                    segment_spatial_properties = [x.spatial_property for cg in all_color_groups for x in cg.color_segments[:10] ] 
-                    segment_l_values = [lightness(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments[:10]]
-                    segment_s_values = [saturation(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments[:10]]
+                    segment_spatial_properties = [x.spatial_property for cg in all_color_groups for x in cg.color_segments ] 
+                    segment_l_values = [lightness(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments]
+                    segment_s_values = [saturation(hex2lab(x.color)) for cg in all_color_groups for x in cg.color_segments]
                     
                     segment_lightness_histogram = Histogram()
                     segment_lacc = segment_lightness_histogram.train(segment_spatial_properties, segment_l_values)
@@ -838,8 +839,8 @@ def main():
                     
                     for patt in all_patterns:
                         for cg in patt.color_groups:
-                            for seg in cg.color_segments[:5]:
-                                adj_ids = list(seg.enclosure_strength.keys())[:5]
+                            for seg in cg.color_segments:
+                                adj_ids = list(seg.enclosure_strength.keys())
 
                                 for cg1 in patt.color_groups:
                                     if cg.color != cg1.color:
@@ -884,7 +885,7 @@ def main():
                         all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
 
                     ratings = [patt.rating for patt in all_patterns]
-                    compat_model = Lasso(alpha=0.01).fit(all_compat_features, ratings)
+                    compat_model = Lasso(alpha=0.01, max_iter=2000).fit(all_compat_features, ratings)
                     print('Compatibility model done...\n')
                     
                     pickle.dump(compat_model, hf, protocol=4)
@@ -892,8 +893,9 @@ def main():
         if wei:
             small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 500]
             weights = train_weights(small_patts)
+            print(weights)
 
-            with open('weights.pickle', 'wb') as wf:
+            with open(weights_file, 'wb') as wf:
                 pickle.dump(weights, wf, protocol=4)
             
             print("Weights training done...\n")
@@ -909,40 +911,41 @@ def main():
             chrom_diff_histogram = pickle.load(hf)
             compat_model = pickle.load(hf)
 
-        with open('weights.pickle', 'rb') as wf:
+        with open(weights_file, 'rb') as wf:
             weights = pickle.load(wf)
         
         if testing:
             small_patts = [x for x in all_patterns if sum([len(g.color_segments) for g in x.color_groups]) < 500]
             for i in test_idx:
-                pattern = small_patts[i]
-                print("Image ", pattern.img_num)
+                pattern = all_patterns[i]
+                print("Image ", pattern.img_num) # 3239321
 
                 old_palette = pattern.palette
-                new_palette = sample(weights, pattern, 10)
+                # new_palette = sample(weights, pattern, 10)
+                for new_palette in find_good_images(weights, pattern, 50, 10):
 
-                testimg_file = os.path.join('test_set2', str(pattern.img_num)+'.png')
-                testimg = Image.open(testimg_file)
-                testimg = testimg.convert('RGB')
-                testimg = np.array(testimg)
+                    # control
+                    rand_palette = []
+                    for i in range(len(old_palette)):
+                        r = np.random.randint(0,256)
+                        g = np.random.randint(0,256)
+                        b = np.random.randint(0,256)
+                        rand_palette.append(rgb2hex((r,g,b)))
 
-                # control
-                rand_palette = []
-                for i in range(len(old_palette)):
-                    r = np.random.randint(0,256)
-                    g = np.random.randint(0,256)
-                    b = np.random.randint(0,256)
-                    rand_palette.append(rgb2hex((r,g,b)))
+                    testimg_file = os.path.join('test_set2', str(pattern.img_num)+'.png')
+                    testimg = Image.open(testimg_file)
+                    testimg = testimg.convert('RGB')
+                    testimg = np.array(testimg)
 
-                rand_img = recolor(testimg, old_palette, rand_palette)
-                new_img = recolor(testimg, old_palette, new_palette)
+                    rand_img = recolor(testimg, old_palette, rand_palette)
+                    new_img = recolor(testimg, old_palette, new_palette)
 
-                fig, ax = plt.subplots(1,3)
-                ax[0].imshow(testimg)
-                ax[1].imshow(rand_img)
-                ax[2].imshow(new_img)
-                fig.show()
-                plt.savefig('{}_new.png'.format(pattern.img_num))
+                    fig, ax = plt.subplots(1,3)
+                    ax[0].imshow(testimg)
+                    ax[1].imshow(rand_img)
+                    ax[2].imshow(new_img)
+                    plt.show()
+                # plt.savefig('{}_new.png'.format(pattern.img_num))
 
         else:
             testimg = Image.open(img_path)
