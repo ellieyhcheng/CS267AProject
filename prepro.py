@@ -13,29 +13,25 @@ from segment import segment_image, get_color_groups, hex2rgb, enclosure_strength
 from thing import ColorGroup, Pattern, ColorGroupSegment
 
 def preprocess():
-    pickle_file = 'capricciosa_patterns.pickle'
+    pickle_file = 'good_patterns.pickle'
+
     count = 0
-    end = 1700
 
     with open(pickle_file, 'wb') as pf:
-        with open(os.path.join('test_set2', 'test.csv')) as csvfile:
-            with open('capricciosa_dataset.csv', 'w') as datafile:
-                datafile.write('artist,patternId,previewImage,palette,rating\n')
+            with open('good_dataset.csv', 'w') as datafile:
+                images = os.listdir('./good')
+                for im in images:
+                    img_num = im.split('.')[0]
 
-                reader = list(csv.DictReader(csvfile))
-                while (count < end) and (count < len(reader)):
-                    row = reader[count]
-                    
-                    if row['artist'] != 'Capricciosa':
-                        count += 1
-                        continue
+                    res = requests.get("http://www.colourlovers.com/api/pattern/" + img_num, params={"format": "json"})
 
-                    img_num = row['patternId']
+                    while res.status_code != 200:
+                        res = requests.get("http://www.colourlovers.com/api/pattern/" + img_num, params={"format": "json"})
+                    p = res.json()[0]
+                    # print(p)
+                    palette = p['colors']
 
-                    palette = row['palette'].strip().split(' ')
-                    # print(img_num)
-                    testimg_file = os.path.join('test_set2', str(img_num)+'.png')
-                    with Image.open(testimg_file) as imgfile:
+                    with Image.open(os.path.join('good', im)) as imgfile:
                         img = imgfile.convert('RGBA')
                         img = np.array(img)
 
@@ -69,26 +65,12 @@ def preprocess():
                         else:
                             new_palette.append(color)
 
-                    res = requests.get("http://www.colourlovers.com/api/pattern/" + str(img_num), params={"format": "json"})
-
-                    while (res.status_code != 200):
-                        print(img_num, ':', 'RETRY')
-                        res = requests.get("http://www.colourlovers.com/api/pattern/" + str(img_num), params={"format": "json"})
-
-                    pattern = res.json()[0]
-
-                    hearts = pattern['numVotes']
-                    views = pattern['numViews']
-                    
-                    r = (hearts - (0.0152 * views - 0.263)) / (0.0128 * views + 0.218) + 3
-
-                    patt = Pattern(img_num, width, height, segments, px2id, enc_str, new_palette, r)
+                    patt = Pattern(img_num, width, height, segments, px2id, enc_str, new_palette, 0)
                     # print('Dumping')
                     pickle.dump(patt, pf, protocol=4)
-                    metadata = row['artist'] + ',' + str(row['patternId']) + ','  + row['previewImage'] + ',' + row['palette']  + ',' + str(r) + '\n'
+                    
+                    metadata = p["userName"] + ',' + str(p['id']) + ',' + p['imageUrl'] + ',' + ' '.join(new_palette) + '\n'
                     datafile.write(metadata)
-
-        print("Finished all color groups...")
-        
+                
 if __name__ == "__main__":
     preprocess()
