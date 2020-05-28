@@ -537,7 +537,7 @@ def train_weights(all_patterns):
                         sum_segment_lightness_score += segment_lightness_score
                         sum_segment_saturation_score += segment_saturation_score
 
-                        adj_ids = list(cs.enclosure_strength.keys())[:2]
+                        adj_ids = list(cs.enclosure_strength.keys())
                         # count = 0
                         # n_adj = 5
 
@@ -579,12 +579,12 @@ def train_weights(all_patterns):
 
         
             diff = np.add(diff, np.subtract(scores[0], scores[1]))
-            if abs(diff[8]) < 1:
-                return weights
+            # if abs(diff[8]) < 1:
+            #     return weights
             
         print(it, np.round(diff, decimals=3))
-        # We subtract because the derivatives point in direction of steepest ascent
-        weights = np.maximum(np.subtract(weights, (diff / float(N)) * learning_rate), 0)
+        # We add because the derivatives point in direction of steepest ascent
+        weights = np.maximum(np.add(weights, (diff / float(N)) * learning_rate), 0)
     
     return weights
 
@@ -790,10 +790,49 @@ def find_good_images_2(weights, pattern, num_iters, max_images, start_palette=No
             max_prob = curr_prob
             best_palette = curr_palette
 
-        if i & 20 == 19:
+        if i % 20 == 19:
             max_prob = 0
             good_images.append(curr_palette)
     
+    return good_images
+
+def find_good_image(weights, pattern, num_iters, start_palette=None):
+    get_prob = factor_graph(pattern)
+    num_colors = len(pattern.palette)
+    #initialize mcmc chain
+    curr_palette = start_palette
+    if curr_palette is None:
+        for j in range(num_colors):
+            r = np.random.randint(0,256)
+            g = np.random.randint(0,256)
+            b = np.random.randint(0,256)
+            curr_palette.append(rgb2hex((r,g,b)))
+    high_temp = 20
+    low_temp = 3
+    #jump 10 times at each temperature and output highest probability image
+    max_prob = 0
+    best_palette = None
+    for i in range(num_iters):
+        curr_temp = low_temp
+        if i % 20 < 10:
+            curr_temp = high_temp
+        prop = perturb(curr_palette.copy(), curr_temp)
+        denom = get_prob(weights,curr_palette)
+        if denom == 0:
+            curr_palette = prop
+            continue
+        curr_prob = get_prob(weights,prop)
+        acceptance = curr_prob/denom
+        u = np.random.rand()
+        if u <= acceptance:
+            curr_palette = prop    
+        if curr_prob >= max_prob:
+            max_prob = curr_prob
+            best_palette = curr_palette
+    return best_palette
+
+def find_good_images_3(weights, pattern, num_iters, num_images, start_palette=None):
+    good_images = [find_good_images(weights,pattern,num_iters,start_palette) for i in range(num_images)]
     return good_images
     
 def perturb(palette, temp):
