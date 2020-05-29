@@ -854,7 +854,7 @@ def perturb(palette, temp, fixed=None):
     b = max(0, min(255, int(b)))
 
     newhex = rgb2hex((r,g,b))
-    palette[unfixedcolor]] = newhex
+    palette[unfixed[color]] = newhex
 
     return palette
 
