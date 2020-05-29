@@ -717,7 +717,7 @@ def sample(weights, pattern, num_iters, start=None):
 
     return palette
 
-def find_good_images(weights, pattern, num_iters, start_palette=None):
+def find_good_images(weights, pattern, num_iters, start_palette=None,fixed=None):
     get_prob = factor_graph(pattern)
     # original_prob = get_prob(weights, pattern.palette)
     num_colors = len(pattern.palette)
@@ -739,7 +739,7 @@ def find_good_images(weights, pattern, num_iters, start_palette=None):
         curr_temp = low_temp
         if i % 20 < 10:
             curr_temp = high_temp
-        prop = perturb(curr_palette.copy(), curr_temp)
+        prop = perturb(curr_palette.copy(), curr_temp, fixed)
         denom = get_prob(weights,curr_palette)
         if denom == 0:
             curr_palette = prop
@@ -763,11 +763,11 @@ def find_good_images(weights, pattern, num_iters, start_palette=None):
             best_palette = curr_palette
     return best_palette
 
-def find_good_images_3(weights, pattern, num_iters, num_images, start_palette=None):
-    good_images = [find_good_images(weights,pattern,num_iters,start_palette) for i in range(num_images)]
+def find_good_images_3(weights, pattern, num_iters, num_images, start_palette=None, fixed=None):
+    good_images = [find_good_image(weights,pattern,num_iters,start_palette,fixed) for i in range(num_images)]
     return good_images
 
-def find_good_image(weights, pattern, num_iters, start_palette=None):
+def find_good_image(weights, pattern, num_iters, start_palette=None, fixed=None):
     get_prob = factor_graph(pattern)
     num_colors = len(pattern.palette)
     #initialize mcmc chain
@@ -787,7 +787,7 @@ def find_good_image(weights, pattern, num_iters, start_palette=None):
         curr_temp = low_temp
         if i % 20 < 10:
             curr_temp = high_temp
-        prop = perturb(curr_palette.copy(), curr_temp)
+        prop = perturb(curr_palette.copy(), curr_temp, fixed)
         denom = get_prob(weights,curr_palette)
         if denom == 0:
             curr_palette = prop
@@ -802,22 +802,32 @@ def find_good_image(weights, pattern, num_iters, start_palette=None):
             best_palette = curr_palette
     return best_palette
     
-def perturb(palette, temp):
-    num = len(palette)
+def perturb(palette, temp, fixed=None):
+    #fixed is list of palette indeces that should not be changed
+
+    unfixed = []
+    if fixed is None:
+        unfixed = [i for i in range(len(palette))]
+    else:
+        for i in range(len(palette)):
+            if i not in fixed:
+                unfixed.append(i)
+
+    num = len(unfixed)
     
     #swap 2 colors
     color1 = np.random.randint(0,num)
     color2 = np.random.randint(0,num)
-    oopsies = palette[color1]
-    palette[color1] = palette[color2]
-    palette[color2] = oopsies
+    oopsies = palette[unfixed[color1]]
+    palette[unfixed[color1]] = palette[unfixed[color2]]
+    palette[unfixed[color2]] = oopsies
 
     # perturb randomly chosen color
     rate = 1
     sigma = rate * temp
 
     color = np.random.randint(0,num)
-    r,g,b = hex2rgb(palette[color])
+    r,g,b = hex2rgb(palette[unfixed[color]])
     rp = np.random.normal(0,sigma)
     gp = np.random.normal(0,sigma)
     bp = np.random.normal(0,sigma)
@@ -844,7 +854,7 @@ def perturb(palette, temp):
     b = max(0, min(255, int(b)))
 
     newhex = rgb2hex((r,g,b))
-    palette[color] = newhex
+    palette[unfixedcolor]] = newhex
 
     return palette
 
