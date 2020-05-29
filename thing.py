@@ -28,7 +28,7 @@ from math import cos, sin,ceil
 
 # http://graphics.stanford.edu/projects/patternColoring/
 
-prefix = 'good_'
+prefix = 'muted_'
 pickle_file = '{}patterns.pickle'.format(prefix)
 histogram_file = '{}histogram.pickle'.format(prefix)
 weights_file = '{}weights.pickle'.format(prefix)
@@ -36,14 +36,14 @@ weights_file = '{}weights.pickle'.format(prefix)
 def hex2lab(color):
     r,g,b = hex2rgb(color)
     rgb = [[[r/255,g/255,b/255]]]
-    return rgb2lab(rgb)[0][0]
+    return rgb2lab(rgb)[0][0]/100.0
 
 def lightness(color):
     # L,a,b = color
     L = color[0]
     a = color[1]
     b = color[2]
-    return (L/100.0)
+    return L
 
 def saturation(color):
     # print(color)
@@ -179,7 +179,8 @@ def perceptual_diff(c1, c2):
     a2 = c2[1]
     b2 = c2[2]
     
-    return abs(np.sqrt(l1**2+a1**2+b1**2) - np.sqrt(l2**2+a2**2+b2**2))
+    return np.sqrt((l1 - l2)**2 + (a1 - a2)**2 + (b1-b2)**2)
+    # return abs(np.sqrt(l1**2+a1**2+b1**2) - np.sqrt(l2**2+a2**2+b2**2))
 
 def relative_lightness(c1, c2):
     l1 = c1[0]
@@ -190,10 +191,10 @@ def relative_lightness(c1, c2):
     a2 = c2[1]
     b2 = c2[2]
 
-    return (l1 - l2)/100.0
+    return abs((l1 - l2))
 
 def relative_saturation(c1, c2):
-    return saturation(c1) - saturation(c2)
+    return abs(saturation(c1) - saturation(c2))
 
 def chromatic_difference(c1, c2):
     l1 = c1[0]
@@ -227,7 +228,7 @@ def compat_features(c1, c2, c3, c4, c5):
         r,g,b = hex2rgb(c)
         rgb1 = np.array([r/255, g/255, b/255])
         lab1 = hex2lab(c)
-        hsv1 = rgb2hsv([[rgb1]])[0][0]
+        hsv1 = rgb2hsv([[rgb1]])[0][0]/255
         chsv1 = [hsv1[1] * cos(hsv1[0]), hsv1[0] * sin(hsv1[0]), hsv1[2]]
 
         rgb[idx] = rgb1
@@ -380,7 +381,8 @@ class Histogram:
 
         data = np.concatenate((color_property_values.reshape(-1,1), probs.reshape(-1,1)), axis=1)
         dists = euclidean_distances(color_property_values.reshape(-1,1))
-        bw = dists.mean() / 2
+        bw = dists.mean()
+        # bw = abs(color_property_values[1] - color_property_values[0])
         kde = KernelDensity(bandwidth=bw, kernel='gaussian').fit(data[:,0].reshape(-1,1), sample_weight=data[:,1])
         # x = np.linspace(0,1,50)
         # log_dens = kde.score_samples(x.reshape(-1,1))
@@ -480,7 +482,7 @@ def score_cmp(model, palette):
     p = model.predict([compat_f])[0]
     if p <= 0:
         return -200, 0
-    return np.log(p/4), p
+    return np.log(p/5), p
 
 
 def train_weights(all_patterns):
@@ -495,10 +497,10 @@ def train_weights(all_patterns):
         chrom_diff_histogram = pickle.load(hf)
         compat_model = pickle.load(hf)
 
-    with open(weights_file, 'rb') as wf:
-        weights = pickle.load(wf)
+    # with open(weights_file, 'rb') as wf:
+    #     weights = pickle.load(wf)
 
-    # weights = np.ones((9,))
+    weights = np.ones((9,))
     # weights = np.full((9,), 0.5)
 
     N = len(all_patterns)
@@ -517,7 +519,7 @@ def train_weights(all_patterns):
     
     # 1 update
     
-    for it in range(10):
+    for it in range(20):
         diff = np.zeros((9,))
         for pattern in all_patterns:
             # do MCMC for k steps to get c_hat
@@ -646,10 +648,9 @@ def factor_graph(pattern):
                             continue
                         if seg1.id in adj_ids:
                             sp12 = np.concatenate((cs.spatial_property, seg1.spatial_property))
-                            cp12 = perceptual_diff(hex2lab(cur_color), hex2lab(adj_color))
                             enc = cs.enclosure_strength[seg1.id]
 
-                            per_diff_score, _ = score_adj(per_diff_histogram, sp12, cp12, enc)
+                            per_diff_score, _ = score_adj(per_diff_histogram, sp12, perceptual_diff(hex2lab(cur_color), hex2lab(adj_color)), enc)
                             sum_per_diff_score += per_diff_score
                             rel_light_score, _ = score_adj(rel_light_histogram, sp12, relative_lightness(hex2lab(cur_color), hex2lab(adj_color)), enc)
                             sum_rel_light_score += rel_light_score
@@ -676,6 +677,7 @@ def factor_graph(pattern):
 
         compat_score, _ = score_cmp(compat_model, palette)
         compat_factor = np.exp(cmp_w*compat_score)
+        
         factor_product *= compat_factor
         
         return factor_product
@@ -728,8 +730,8 @@ def find_good_images(weights, pattern, num_iters, start_palette=None):
             g = np.random.randint(0,256)
             b = np.random.randint(0,256)
             curr_palette.append(rgb2hex((r,g,b)))
-    high_temp = 30
-    low_temp = 2
+    high_temp = 40
+    low_temp = 3
     #jump 10 times at each temperature and output highest probability image
     max_prob = 0
     best_palette = None
@@ -829,8 +831,8 @@ def find_good_images_2(weights, pattern, num_iters, max_images, start_palette=No
             b = np.random.randint(0,256)
             curr_palette.append(rgb2hex((r,g,b)))
     
-    high_temp = 40
-    low_temp = 5
+    high_temp = 12
+    low_temp = 1
 
     #jump 10 times at each temperature and output highest probability image
     max_prob = 0
@@ -862,15 +864,15 @@ def find_good_images_2(weights, pattern, num_iters, max_images, start_palette=No
             max_prob = curr_prob
             best_palette = curr_palette
 
-        if abs(curr_prob - original_prob) < 0.03:
-            # curr_palette = prob
-            good_images.append(curr_palette)
-            curr_palette = prop
-            num_images += 1
-
-        # if i % 20 == 19:
-        #     max_prob = 0
+        # if abs(curr_prob - original_prob) < 0.03:
+        #     # curr_palette = prob
         #     good_images.append(curr_palette)
+        #     curr_palette = prop
+        #     num_images += 1
+
+        if i % 20 == 19:
+            max_prob = 0
+            good_images.append(curr_palette)
     
     return good_images
 
@@ -890,16 +892,17 @@ def main():
     training = False
     testing = True
 
-    hist = False
+    hist = True
 
     unary = True
     pairwise = True
     compat = True
 
-    wei = not(hist)
-    num_patterns = 200
-    test_idx = np.random.randint(0,200,3)
-    # test_idx = [198,199]
+    wei = False
+    
+    num_patterns = 154
+    test_idx = np.random.randint(101,154,5)
+    # test_idx = [113]
     img_path = ''
 
     print('Retrieving patterns')
@@ -1016,7 +1019,7 @@ def main():
                             all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
                             ratings.append(float(row['rating']))
 
-                        compat_model = Lasso(alpha=0.01, max_iter=10000).fit(all_compat_features, ratings)
+                        compat_model = Lasso(alpha=0.001, max_iter=10000).fit(all_compat_features, ratings)
                         print('Compatibility model done...\n')
                     # colors= all_patterns[0].palette
                     # print(colors)
@@ -1079,21 +1082,22 @@ def main():
                 # for new_palette in find_good_images(weights, pattern, 50, 10):
 
 
-                testimg_file = os.path.join('test_set2', str(pattern.img_num)+'.png')
+                testimg_file = os.path.join('muted', str(pattern.img_num)+'.png')
                 testimg = Image.open(testimg_file)
                 testimg = testimg.convert('RGB')
                 testimg = np.array(testimg)
                 
                 num = 8
-                # new_palettes = find_good_images_3(weights, pattern, 200, num)
-                new_palettes = find_good_images_2(weights,pattern,500,12)
+                new_palettes = find_good_images_3(weights, pattern, 200, num)
+                # new_palettes = find_good_images_2(weights,pattern,500,12)
                 # new_palettes = find_good_images(weights,pattern,100,9)[:8]
                 
                 get_prob = factor_graph(pattern)
 
-                rin = np.random.random_integers(0,len(new_palettes) - 1,num)
-                # probs = [get_prob(weights, p) for p in new_palettes]
-                # rin = np.argsort(np.array(probs))[::-1][:8]
+                probs = [get_prob(weights, p) for p in new_palettes]
+                # probs = [score_cmp(compat_model, p)[1] for p in new_palettes]
+                # print(new_palettes)
+                rin = np.argsort(np.array(probs))[::-1][:num]
                 new_palettes = np.array(new_palettes)[rin]
 
                 n = len(new_palettes) + 1
@@ -1101,12 +1105,14 @@ def main():
                 fig, ax = plt.subplots(max(2, ceil(n/col)), col)
                 ax[0][0].imshow(testimg)
                 ax[0][0].set_title(round(get_prob(weights,pattern.palette), 3))
+                # ax[0][0].set_title(round(score_cmp(compat_model, pattern.palette)[1], 3))
                 ax[0][0].axis('off')
                 fig.suptitle(pattern.img_num)
                 
                 for j in range(1, n):
                     ax[int(j/col)][j % col].imshow(recolor(testimg, old_palette, new_palettes[j-1]))
                     ax[int(j/col)][j % col].set_title(round(get_prob(weights, new_palettes[j - 1]), 3))
+                    # ax[int(j/col)][j % col].set_title(round(score_cmp(compat_model, new_palettes[j - 1])[1], 3))
                     ax[int(j/col)][j%col].axis('off')
                 plt.show()
                 # plt.savefig('{}_new.png'.format(pattern.img_num))
@@ -1264,7 +1270,7 @@ def test_scores(i):
 
 if __name__ == "__main__":
     main()
-    # num_patterns = 1000
+    # num_patterns = 154
 
     # print('Retrieving patterns')
     # all_patterns = []
@@ -1290,21 +1296,22 @@ if __name__ == "__main__":
     #     compat_model = pickle.load(hf)
 
 
-    # all_compat_features = []
+    # # all_compat_features = []
 
-    # for patt in all_patterns:
-    #     areas = np.array([cg.area for cg in patt.color_groups])
-    #     ind = np.argsort(areas)
+    # # for patt in all_patterns:
+    # #     areas = np.array([cg.area for cg in patt.color_groups])
+    # #     ind = np.argsort(areas)
 
-    #     colors = np.array(patt.palette)[ind]
+    # #     colors = np.array(patt.palette)[ind]
 
-    #     idx = 0
-    #     while len(colors) < 5:
-    #         colors = np.append(colors, patt.palette[idx])
-    #         idx += 1
+    # #     idx = 0
+    # #     while len(colors) < 5:
+    # #         colors = np.append(colors, patt.palette[idx])
+    # #         idx += 1
         
-    #     all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
+    # #     all_compat_features.append(compat_features(colors[0], colors[1], colors[2], colors[3], colors[4]))
 
+    # all_compat_features = [compat_features('a2ff00', '00ff80', '009dff', '4400ff', 'c800ff')]
     # # ratings = [patt.rating for patt in all_patterns]
     # # compat_model = Lasso(alpha=0.1, max_iter=10000).fit(all_compat_features, ratings)
     # # print('Compatibility model done...\n')
