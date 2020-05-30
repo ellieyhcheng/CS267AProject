@@ -12,7 +12,7 @@ import numpy as np
 from segment import segment_image, get_color_groups, hex2rgb, enclosure_strengths
 from thing import ColorGroup, Pattern, ColorGroupSegment
 
-folder = 'muted'
+folder = 'good'
 
 def preprocess():
     id2palette = {}
@@ -27,7 +27,7 @@ def preprocess():
     count = 0
 
     with open(pickle_file, 'wb') as pf:
-            with open('{}_dataset.csv'.format(folder), 'w') as datafile:
+            with open('{}_dataset2.csv'.format(folder), 'w') as datafile:
                     images = os.listdir(folder)
                     for im in images:
                         img_num = im.split('.')[0]

@@ -1,4 +1,3 @@
-from sklearn.cluster import KMeans
 from PIL import Image
 import numpy as np
 import csv
@@ -229,17 +228,17 @@ def get_color_groups(img_num):
                 print(seg)
                 break
 
-    print(get_color(img2,15,43,palette))
-    print(get_color(img2,150,170,palette))
-    # print(get_color(img2,3,28,palette))
-    for i in range(img2.shape[0]):
-        for j in range(img2.shape[1]):
-            if px2id[i][j] != 22:# and px2id[i][j] != 36:
-                img2[i][j] = [0,0,0,255]
-            else:
-                print(i,j)
-    plt.imshow(img2)
-    plt.show()
+    # print(get_color(img2,15,43,palette))
+    # print(get_color(img2,150,170,palette))
+    # # print(get_color(img2,3,28,palette))
+    # for i in range(img2.shape[0]):
+    #     for j in range(img2.shape[1]):
+    #         if px2id[i][j] != 22:# and px2id[i][j] != 36:
+    #             img2[i][j] = [0,0,0,255]
+    #         else:
+    #             print(i,j)
+    # plt.imshow(img2)
+    # plt.show()
     # print(get_color(img2,1,23,palette))
     # print(get_color(img2,1,24,palette))
     # print(get_color(img2,3,28,palette))
@@ -263,13 +262,13 @@ def get_color_groups(img_num):
     total = sum([sum(x) for x in enc_str])
     assert(np.round(total, 2) == 1)
 
-    enc = enc_str[3]
-    enc_map = {}
-    for i in range(len(enc)):
-        if enc[i] != 0:
-            enc_map[i] = enc[i]
-    print(enc_map)
-    print(adjacency[3])
+    # enc = enc_str[3]
+    # enc_map = {}
+    # for i in range(len(enc)):
+    #     if enc[i] != 0:
+    #         enc_map[i] = enc[i]
+    # print(enc_map)
+    # print(adjacency[3])
 
     for color in palette:
         group = np.full(img.shape, 255)
@@ -288,5 +287,5 @@ def test(img_num):
 
 if __name__ == '__main__':
     # test(584317)
-    test(707090)
+    test(760602)
     # test(465753)
