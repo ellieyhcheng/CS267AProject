@@ -383,8 +383,8 @@ class Histogram:
 
         data = np.concatenate((color_property_values.reshape(-1,1), probs.reshape(-1,1)), axis=1)
         dists = euclidean_distances(color_property_values.reshape(-1,1))
-        # bw = dists.mean()
-        bw = abs(color_property_values[1] - color_property_values[0])
+        bw = dists.mean()
+        # bw = abs(color_property_values[1] - color_property_values[0])
         kde = KernelDensity(bandwidth=bw, kernel='gaussian').fit(data[:,0].reshape(-1,1), sample_weight=data[:,1])
         # x = np.linspace(0,1,50)
         # log_dens = kde.score_samples(x.reshape(-1,1))
@@ -499,11 +499,10 @@ def train_weights(all_patterns):
         chrom_diff_histogram = pickle.load(hf)
         compat_model = pickle.load(hf)
 
-    # with open(weights_file, 'rb') as wf:
-    #     weights = pickle.load(wf)
+    with open(weights_file, 'rb') as wf:
+        weights = pickle.load(wf)
 
-    weights = np.ones((9,))
-    # weights = np.full((9,), 0.5)
+    # weights = np.ones((9,))
 
     N = len(all_patterns)
     learning_rate = 4
@@ -519,9 +518,7 @@ def train_weights(all_patterns):
     adj_chrom_diff_w = weights[7]
     cmp_w = weights[8]
     
-    # 1 update
-    
-    for it in range(1):
+    for it in range(3):
         diff = np.zeros((9,))
         for pattern in all_patterns:
             # do MCMC for k steps to get c_hat
@@ -685,7 +682,56 @@ def factor_graph(pattern):
         return factor_product
 
     return get_prob
-    
+
+def train_perturb(palette, temp, fixed=None):
+    #fixed is list of palette indeces that should not be changed
+
+    unfixed = []
+    if fixed is None:
+        unfixed = [i for i in range(len(palette))]
+    else:
+        for i in range(len(palette)):
+            if i not in fixed:
+                unfixed.append(i)
+
+    num = len(unfixed)
+
+    # perturb randomly chosen color
+    rate = 1
+    sigma = rate * temp
+
+    color = np.random.randint(0,num)
+    r,g,b = hex2rgb(palette[unfixed[color]])
+    rp = np.random.normal(0,sigma)
+    gp = np.random.normal(0,sigma)
+    bp = np.random.normal(0,sigma)
+
+    if r + rp > 255 or r + rp < 0:
+        r = r - rp
+    else:
+        r = r + rp
+    if g + gp > 255 or g + gp < 0:
+        g = g - gp
+    else:
+        g = g + gp
+    if b + bp > 255 or b + bp < 0:
+        b = b - bp
+    else:
+        b = b + bp
+
+    # r = int(r)
+    # g = int(g)
+    # b = int(b)
+
+    r = max(0, min(255, int(r)))
+    g = max(0, min(255, int(g)))
+    b = max(0, min(255, int(b)))
+
+    newhex = rgb2hex((r,g,b))
+    palette[unfixed[color]] = newhex
+
+    return palette    
+
 def sample(weights, pattern, num_iters, start=None):
     # metropolis hasitngs:
     # propose new state, accept with probability proportional to model score
@@ -705,9 +751,9 @@ def sample(weights, pattern, num_iters, start=None):
         
     get_prob = factor_graph(pattern)
     
-    temp = 2
+    temp = 20
     for i in range (num_iters):
-        prop = perturb(palette.copy(), temp)
+        prop = train_perturb(palette.copy(), temp)
         denom = get_prob(weights,palette)
         if denom == 0:
             palette = prop
@@ -901,8 +947,8 @@ def recolor(img, original, new_palette):
     return np.uint8(newimg)
 
 def main():
-    training = False
-    testing = False
+    training = True
+    testing = True
 
     hist = True
 
@@ -912,24 +958,28 @@ def main():
 
     wei = True
     
-    num_patterns = 154
-    test_idx = np.random.choice(np.arange(0,154),3,False)
+    k = 5
+
+    num_patterns = 1700
+    test_idx = np.random.choice(np.arange(0,154),5,False)
     # test_idx = np.random.randint(0,154,18)
     # test_idx = [113]
-    img_path = 'test/1.png'
+    img_paths = ['muted/3493360.png', 'muted/3977139.png', 'muted/3722857.png']
+    # img_paths = [os.path.join('new', x) for x in os.listdir('new/')]
 
-    print('Retrieving patterns')
-    all_patterns = []
-    with open(pickle_file, 'rb') as pf:
-        i = 0
-        while i < num_patterns:
-            i += 1
-            try:
-                all_patterns.append(pickle.load(pf))
-            except EOFError:
-                break
-    print('# Patterns:', len(all_patterns))
-    print()
+    if training or testing:
+        print('Retrieving patterns')
+        all_patterns = []
+        with open(pickle_file, 'rb') as pf:
+            i = 0
+            while i < num_patterns:
+                i += 1
+                try:
+                    all_patterns.append(pickle.load(pf))
+                except EOFError:
+                    break
+        print('# Patterns:', len(all_patterns))
+        print()
 
     if training:
         if hist:
@@ -1084,10 +1134,25 @@ def main():
         with open(weights_file, 'rb') as wf:
             weights = pickle.load(wf)
         
-        weights[0] = 0.2
-        weights[1] = 0.3
-        weights[2] = 0.4
-        weights[3] = 0.5
+        # weights[0] = 0.19270161
+        # weights[1] = 0.36856805
+        # weights[2] = 0.19
+        # weights[3] = 0.36
+
+        # weights = [
+        #     0.5489524055385332,
+        #     0.3916957890631309,
+        #     0.6634808102466225,
+        #     0.6072022699230435,
+        #     1.4335314502402619,
+        #     0.4741491895465859,
+        #     0.9043698496119056,
+        #     0.44573826463578836,
+        #     1.2229857384516578
+        # ]
+
+        # weights[4] = 0.8
+        # weights[8] = 3.2229857384516578
 
         if testing:
             
@@ -1108,137 +1173,242 @@ def main():
                     while len(old_palette) < 5:
                         old_palette.append(pattern.palette[-1])
 
-                    rand_palette = []
-                    for j in range(len(old_palette)):
-                        r = np.random.randint(0,256)
-                        g = np.random.randint(0,256)
-                        b = np.random.randint(0,256)
-                        rand_palette.append(rgb2hex((r,g,b)))
-
                     testimg_file = os.path.join('muted', str(pattern.img_num)+'.png')
                     testimg = Image.open(testimg_file)
                     testimg = testimg.convert('RGB')
+                    ori_w, ori_h = testimg.size
+                    if ori_h or ori_h > 320:
+                        resize_ratio = min(200/ori_w, 200/ori_h)
+                        newsize = (int(resize_ratio*ori_w),int(resize_ratio*ori_h) )
+                        testimg = testimg.resize(newsize) 
                     testimg = np.array(testimg)
                     
-                    num = 4
-                    new_palettes = find_good_images_3(weights, pattern, 200, num)
+                    num = 5
+                    new_palettes = np.array(find_good_images_3(weights, pattern, 200, num))
                     
                     get_prob = factor_graph(pattern)
 
                     probs = [get_prob(weights, p) for p in new_palettes]
-                    rin = np.argsort(np.array(probs))[::-1][0]
-                    # rin = np.random.randint(0, num)
-                    new_palette = new_palettes[rin]
+                    rin = np.argsort(np.array(probs))[::-1]
+                    # # rin = np.random.randint(0, num)
+                    new_palettes = new_palettes[rin]
 
-                    new_indices = np.array([1,2,3])
-                    np.random.shuffle(new_indices)
-                    all_palettes = np.array([old_palette, rand_palette, new_palette])[new_indices - 1]
+                    for new_palette in new_palettes:
+                        new_img = recolor(testimg, old_palette, new_palette)
+                        im = Image.fromarray(new_img)
+                        im.save("results/{}_{}.png".format(pattern.img_num,new_palette[0]))
 
-                    n = len(all_palettes)
-
-                    col = 3
-                    fig, ax = plt.subplots(1,3)
-                    
-                    for j in range(n):
-                        ax[j % col].imshow(recolor(testimg, old_palette, all_palettes[j]))
-                        ax[j % col].set_title(str(j+1))
-                        ax[j%col].axis('off')
-                        print(' '.join(all_palettes[j]))
-                    
-                    plt.savefig('results/{}_{}.png'.format(count,pattern.img_num), bbox_inches='tight')
-                    plt.close(fig)
-
-                    kf.write('{}_{},{},{},{}\n'.format(count,pattern.img_num, answer[new_indices[0]], answer[new_indices[1]], answer[new_indices[2]]))
                     count+=1
 
-                # col = 3
-                # fig, ax = plt.subplots(max(2, ceil(n/col)), col)
-                # # ax[0][0].imshow(testimg)
-                # # # ax[0][0].set_title(round(get_prob(weights,pattern.palette), 3))
-                # # # ax[0][0].set_title(round(score_cmp(compat_model, pattern.palette)[1], 3))
-                # # ax[0][0].axis('off')
-                # # fig.suptitle(pattern.img_num)
-                
-                # for j in range(0, n+1):
-                #     ax[int(j/col)][j % col].imshow(recolor(testimg, old_palette, new_palettes[j-1]))
-                #     # ax[int(j/col)][j % col].set_title(round(get_prob(weights, new_palettes[j - 1]), 3))
-                #     # ax[int(j/col)][j % col].set_title(round(score_cmp(compat_model, new_palettes[j - 1])[1], 3))
-                #     ax[int(j/col)][j % col].set_title(str(j+1))
-                #     ax[int(j/col)][j%col].axis('off')
-                #     print(' '.join(new_palettes[j-1]))
 
-                # r = np.random.randint(0,100)
+                    # pattern = all_patterns[i]
+                    # print("Image ", pattern.img_num) # 3239321
 
-                # # plt.show()
-                
-                # plt.savefig('results/{}_{}.png'.format(pattern.img_num, r))
+                    # old_palette = pattern.palette
+                    
+                    # while len(old_palette) < 5:
+                    #     old_palette.append(pattern.palette[-1])
+
+                    # rand_palette = []
+                    # for j in range(len(old_palette)):
+                    #     r = np.random.randint(0,256)
+                    #     g = np.random.randint(0,256)
+                    #     b = np.random.randint(0,256)
+                    #     rand_palette.append(rgb2hex((r,g,b)))
+
+                    # testimg_file = os.path.join('test_set2', str(pattern.img_num)+'.png')
+                    # testimg = Image.open(testimg_file)
+                    # testimg = testimg.convert('RGB')
+                    # ori_w, ori_h = testimg.size
+                    # if ori_h or ori_h > 320:
+                    #     resize_ratio = min(200/ori_w, 200/ori_h)
+                    #     newsize = (int(resize_ratio*ori_w),int(resize_ratio*ori_h) )
+                    #     testimg = testimg.resize(newsize) 
+                    # testimg = np.array(testimg)
+                    
+                    # num = 5
+                    # new_palettes = np.array(find_good_images_3(weights, pattern, 200, num))
+                    
+                    # get_prob = factor_graph(pattern)
+
+                    # probs = [get_prob(weights, p) for p in new_palettes]
+                    # rin = np.argsort(np.array(probs))[::-1][0]
+                    # # # rin = np.random.randint(0, num)
+                    # new_palette = new_palettes[rin]
+
+                    # new_indices = np.array([1,2,3])
+                    # np.random.shuffle(new_indices)
+                    # all_palettes = np.array([old_palette, rand_palette, new_palette])[new_indices - 1]
+
+                    # n = len(all_palettes)
+
+                    # col = 3
+                    # fig, ax = plt.subplots(1,3)
+                    
+                    # for j in range(n):
+                    #     ax[j % col].imshow(recolor(testimg, old_palette, all_palettes[j]))
+                    #     ax[j % col].set_title(str(j+1))
+                    #     ax[j%col].axis('off')
+                    #     print(' '.join(all_palettes[j]))
+                    
+                    # plt.savefig('results/{}_{}.png'.format(count,pattern.img_num), bbox_inches='tight')
+                    # plt.close(fig)
+
+                    # kf.write('{}_{},{},{},{}\n'.format(count,pattern.img_num, answer[new_indices[0]], answer[new_indices[1]], answer[new_indices[2]]))
+                    # count+=1
+
+                    
+
+
+                    # pattern = all_patterns[i]
+                    # print("Image ", pattern.img_num) # 3239321
+
+                    # old_palette = pattern.palette
+                    
+                    # while len(old_palette) < 5:
+                    #     old_palette.append(pattern.palette[-1])
+
+                    # # rand_palette = []
+                    # # for j in range(len(old_palette)):
+                    # #     r = np.random.randint(0,256)
+                    # #     g = np.random.randint(0,256)
+                    # #     b = np.random.randint(0,256)
+                    # #     rand_palette.append(rgb2hex((r,g,b)))
+
+                    # testimg_file = os.path.join('test', str(pattern.img_num)+'.png')
+                    # testimg = Image.open(testimg_file)
+                    # testimg = testimg.convert('RGB')
+                    # ori_w, ori_h = testimg.size
+                    # if ori_h or ori_h > 320:
+                    #     resize_ratio = min(200/ori_w, 200/ori_h)
+                    #     newsize = (int(resize_ratio*ori_w),int(resize_ratio*ori_h) )
+                    #     testimg = testimg.resize(newsize) 
+                    # testimg = np.array(testimg)
+                    
+                    # num = 5
+                    # new_palettes = np.array(find_good_images_3(weights, pattern, 200, num))
+                    
+                    # get_prob = factor_graph(pattern)
+
+                    # probs = [get_prob(weights, p) for p in new_palettes]
+                    # rin = np.argsort(np.array(probs))[::-1][:num]
+                    # # # rin = np.random.randint(0, num)
+                    # # new_palette = new_palettes[rin]
+                    # new_palettes = new_palettes[rin]
+
+                    # # new_indices = np.array([1,2,3])
+                    # # np.random.shuffle(new_indices)
+                    # # all_palettes = np.array([old_palette, rand_palette, new_palette])[new_indices - 1]
+
+                    # # n = len(all_palettes)
+
+                    # # col = 3
+                    # # fig, ax = plt.subplots(1,3)
+                    
+                    # # for j in range(n):
+                    # #     ax[j % col].imshow(recolor(testimg, old_palette, all_palettes[j]))
+                    # #     ax[j % col].set_title(str(j+1))
+                    # #     ax[j%col].axis('off')
+                    # #     print(' '.join(all_palettes[j]))
+                    
+                    # # plt.savefig('results/{}_{}.png'.format(count,pattern.img_num), bbox_inches='tight')
+                    # # plt.close(fig)
+
+                    # # kf.write('{}_{},{},{},{}\n'.format(count,pattern.img_num, answer[new_indices[0]], answer[new_indices[1]], answer[new_indices[2]]))
+                    # count+=1
+
+                    # new_palettes = np.insert(new_palettes, [0], old_palette, axis=0)
+                    # n = len(new_palettes)
+                    # col = 3
+                    # fig, ax = plt.subplots(max(2, ceil(n/col)), col)
+                    # # ax[0][0].imshow(testimg)
+                    # # # ax[0][0].set_title(round(get_prob(weights,pattern.palette), 3))
+                    # # # ax[0][0].set_title(round(score_cmp(compat_model, pattern.palette)[1], 3))
+                    # # ax[0][0].axis('off')
+                    # # fig.suptitle(pattern.img_num)
+                    
+                    # for j in range(0, n):
+                    #     ax[int(j/col)][j % col].imshow(recolor(testimg, old_palette, new_palettes[j-1]))
+                    #     # ax[int(j/col)][j % col].set_title(round(get_prob(weights, new_palettes[j - 1]), 3))
+                    #     # ax[int(j/col)][j % col].set_title(round(score_cmp(compat_model, new_palettes[j - 1])[1], 3))
+                    #     # ax[int(j/col)][j % col].set_title(str(j+1))
+                    #     ax[int(j/col)][j%col].axis('off')
+                    #     print(' '.join(new_palettes[j]))
+
+                    # # plt.show()
+                    
+                    # plt.savefig('results/{}_{}.png'.format(pattern.img_num, count - 1))
 
         else:
-            img_num = img_path.split('/')[-1].split('.')[0]
-            img = Image.open(img_path)
-            img = img.convert('RGB')
-            ori_w, ori_h = img.size
-            if ori_h or ori_h > 320:
-                resize_ratio = min(200/ori_w, 200/ori_h)
-                newsize = (int(resize_ratio*ori_w),int(resize_ratio*ori_h) )
-                img = img.resize(newsize) 
-            img = np.array(img)
+            for img_path in img_paths:
+                print(img_path)
+                img_num = img_path.split('/')[-1].split('.')[0]
+                img = Image.open(img_path)
+                img = img.convert('RGB')
+                ori_w, ori_h = img.size
+                if ori_h or ori_h > 320:
+                    resize_ratio = min(200/ori_w, 200/ori_h)
+                    newsize = (int(resize_ratio*ori_w),int(resize_ratio*ori_h) )
+                    img = img.resize(newsize) 
+                img = np.array(img)
 
-            height,width,d = img.shape
+                height,width,d = img.shape
 
-            vectorized = np.float32(img.reshape((-1,3)))
+                vectorized = np.float32(img.reshape((-1,3)))
 
-            k = 5
-            attempts = 10
-            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-            ret,label,center = cv2.kmeans(vectorized,k,None,criteria,attempts,cv2.KMEANS_PP_CENTERS)
-            center = np.uint8(center)
+                attempts = 10
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+                ret,label,center = cv2.kmeans(vectorized,k,None,criteria,attempts,cv2.KMEANS_PP_CENTERS)
+                center = np.uint8(center)
 
-            res = center[label.flatten()]
-            # print(res)
-            result_image = res.reshape((img.shape))
+                res = center[label.flatten()]
+                # print(res)
+                result_image = res.reshape((img.shape))
 
-            palette = []
-            for rgb in center:
-                r,g,b = rgb[0],rgb[1],rgb[2]
-                palette.append(rgb2hex((r,g,b)))
-            
-            start = time.time()
-            print('Start:', datetime.datetime.fromtimestamp(start).strftime('%H:%M:%S'))
-            segments,px2id,adjacency = segment_image(result_image, palette)
-            print('Adj:', len(adjacency))
-            if len(adjacency) > 5000:
-                print('    TOO MANY SEGMENTS')
-                return
-            
-            enc_str = enclosure_strengths(px2id, len(adjacency), adjacency)
-            endtime = time.time()
-            print('End:', datetime.datetime.fromtimestamp(endtime).strftime('%H:%M:%S'))
+                palette = []
+                for rgb in center:
+                    r,g,b = rgb[0],rgb[1],rgb[2]
+                    palette.append(rgb2hex((r,g,b)))
+                
+                start = time.time()
+                print('Start:', datetime.datetime.fromtimestamp(start).strftime('%H:%M:%S'))
+                segments,px2id,adjacency = segment_image(result_image, palette)
+                print('Adj:', len(adjacency))
+                if len(adjacency) > 5000:
+                    print('    TOO MANY SEGMENTS')
+                    return
+                
+                enc_str = enclosure_strengths(px2id, len(adjacency), adjacency)
+                endtime = time.time()
+                print('End:', datetime.datetime.fromtimestamp(endtime).strftime('%H:%M:%S'))
 
-            old_palette = []
-            for color in palette:
-                if len(segments[color]) == 0:
-                    segments.pop(color, None)
-                else:
-                    old_palette.append(color)
+                old_palette = []
+                for color in palette:
+                    if len(segments[color]) == 0:
+                        segments.pop(color, None)
+                    else:
+                        old_palette.append(color)
 
-            patt = Pattern(0, width, height, segments, px2id, enc_str, old_palette, 0)
+                patt = Pattern(img_num, width, height, segments, px2id, enc_str, old_palette, 0)
 
-            print('Sampling new colors...')
-            new_palettes = find_good_images_3(weights, patt, 200, 5)[::-1][:3]
-                    
-            # get_prob = factor_graph(patt)
+                # with open(pickle_file, 'ab') as pf:
+                #     pickle.dump(patt, pf)
 
-            # probs = [get_prob(weights, p) for p in new_palettes]
-            # rin = np.argsort(np.array(probs))[::-1][0]
-            
-            # new_palette = new_palettes[rin]
+                print('Sampling new colors...')
+                new_palettes = find_good_images_3(weights, patt, 300, 3)[::-1][:3]
+                        
+                # get_prob = factor_graph(patt)
 
-            for palette in new_palettes:
-                print(' '.join(palette))
-                new_img = recolor(img, old_palette, palette)
-                im = Image.fromarray(new_img)
-                im.save("{}_{}.png".format(img_num,palette[0]))
+                # probs = [get_prob(weights, p) for p in new_palettes]
+                # rin = np.argsort(np.array(probs))[::-1][0]
+                
+                # new_palette = new_palettes[rin]
+
+                for palette in new_palettes:
+                    print(' '.join(palette))
+                    new_img = recolor(img, old_palette, palette)
+                    im = Image.fromarray(new_img)
+                    im.save("results/{}_{}.png".format(img_num,palette[0]))
 
             
 def test_scores(i):
