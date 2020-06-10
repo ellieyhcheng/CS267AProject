@@ -1,10 +1,10 @@
 # Graphic Generator
 
-Graphic generator from an input image using k-cluster, probabilistic factor graph, and MCMC sampling. 
+Graphic generator from an input image using k-means, probabilistic factor graph, and MCMC sampling. 
 
 ## How to generate a image
 ```Python
-python3 main.py test.png --iter 200 --num 3 --cluster 5
+python3 main.py test.png --iter 200 --num 3 --clusters 5
 ```
 Resulting images will be in `results/`. At least 100 sampling iterations is necessary to generate somewhat decent graphics. 500 iterations is recommended. 
 
